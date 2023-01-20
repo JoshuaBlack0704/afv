@@ -1,15 +1,15 @@
 #![no_std]
 #![no_main]
 
+use common_core::bits::Bits;
 use panic_halt as _;
 
 #[arduino_hal::entry]
 fn main() -> ! {
     let dp = arduino_hal::Peripherals::take().unwrap();
-    let data:u8 = 0x67;
-    let phrase = "I luv you!";
+    let phrase = "Hello World!";
     let bytes = phrase.as_bytes();
-    // let bytes = [data];
+    let bytes = bytes.iter().map(|b| Bits::new(b));
     let pins = arduino_hal::pins!(dp);
 
 
@@ -17,12 +17,12 @@ fn main() -> ! {
     let mut tgt = pins.d12.into_output();
     led.set_high();
 
-    for byte in bytes.iter(){
-        for bit_index in 0..u8::BITS{
-            let mask:u8 = 0x80 >> bit_index;
-            if *byte & mask == mask{
+    for bit in bytes{
+        for bit in bit.boolean_iter(){
+           if *bit{
                 tgt.set_high();
-            }
+                
+            } 
             else{
                 tgt.set_low();
             }
