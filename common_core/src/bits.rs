@@ -36,6 +36,10 @@ impl Bits{
     pub fn bits_numeric(&self) -> &[u8; 8] {
         &self.bits_numeric
     }
+    /// Gets the associated byte
+    pub fn byte(&self) -> u8 {
+        self.src
+    }
     /// Gets the bits as a list of bools
     pub fn bits_boolean(&self) -> &[bool; 8] {
         &self.bits_boolean
@@ -52,6 +56,7 @@ impl Bits{
     pub fn boolean_iter(&self) -> core::slice::Iter<bool> {
         self.bits_boolean.iter()
     }
+    /// Constructs from byte length array of bits
     pub fn to_bits<T>(obj: &T, mem: &mut [Bits]){
         let mut bits = mem.iter_mut();
         let size = size_of::<T>();
@@ -67,6 +72,27 @@ impl Bits{
             
         }
         
+    }
+    pub fn from_bits(bits: &mut [u8]) -> Bits {
+        bits.reverse();
+        let mut val:u8 = 0;
+        for (i,b) in bits.iter().enumerate(){
+            let mask:u8;
+            if *b == 0{
+                mask = 0;
+            }
+            else{
+                mask = 0x80;
+            }
+
+            val = val | mask;
+            if i == bits.len() - 1{
+                break;
+            }
+            val = val >> 1;
+
+        }
+        Self::new(&val)
     }
 }
 

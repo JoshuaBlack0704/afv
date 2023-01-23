@@ -2,6 +2,7 @@
 #![no_main]
 
 use arduino_hal::{spi::SerialClockRate, prelude::_embedded_hal_blocking_spi_Write};
+use embedded_hal::digital::v2::OutputPin;
 use panic_halt as _;
 
 #[arduino_hal::entry]
@@ -18,12 +19,13 @@ fn main() -> ! {
     err.set_low();
     let mut settings = arduino_hal::spi::Settings::default();
     settings.clock = SerialClockRate::OscfOver128;
-    let (mut spi, _cs) = arduino_hal::spi::Spi::new(spi, sclk, mosi, miso, cs, settings);
+    let (mut spi, mut _cs) = arduino_hal::spi::Spi::new(spi, sclk, mosi, miso, cs, settings);
     let phrase = "Hello";
+    let data = phrase.as_bytes();
     loop {
         arduino_hal::delay_ms(1000);
-        let data = phrase.as_bytes();
+        let _ = _cs.set_low();
         let _ = spi.write(&data);
-        
+        let _ = _cs.set_high();
     }
 }
