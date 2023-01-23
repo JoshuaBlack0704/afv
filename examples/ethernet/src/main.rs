@@ -26,26 +26,47 @@ fn main() -> ! {
     settings.mode = spi::Mode{ polarity: spi::Polarity::IdleLow, phase: spi::Phase::CaptureOnFirstTransition };
     let (mut spi, mut cs) = arduino_hal::spi::Spi::new(spi, sclk, mosi, miso, cs, settings);
     arduino_hal::delay_ms(1000);
+    // Set ping in MR on common register
+    // let w_addr:u16 = 0x0000;
+    // let w_addr = w_addr.to_be_bytes();
+    // let mut w_control:[u8;8] = [0,0,0,0,0,1,0,0];
+    // let w_control = Bits::from_bits(&mut w_control).byte();
+    // let mut write:[u8;8] = [0,0,0,1,0,0,0,0];
+    // let write = Bits::from_bits(&mut write).byte();
+    // cs.set_low();
+    // arduino_hal::delay_ms(1);
+    // spi.send(w_addr[0]);
+    // arduino_hal::delay_ms(1);
+    // spi.send(w_addr[1]);
+    // arduino_hal::delay_ms(1);
+    // spi.send(w_control);
+    // arduino_hal::delay_ms(1);
+    // spi.send(write);
+    // arduino_hal::delay_ms(1);
+    // cs.set_high();
+    
+    // Get MR from common register
+    arduino_hal::delay_ms(1000);
     cs.set_low().unwrap();
-    let v_addr:u16 = 0x0039;
-    let v_addr = v_addr.to_be_bytes();
-    let mut v_control:[u8;8] = [0,0,0,0,0,0,0,0];
-    let v_control = Bits::from_bits(&mut v_control).byte();
-    let v:u8 = 0;
+    let w_addr:u16 = 0x0000;
+    let w_addr = w_addr.to_be_bytes();
+    let mut w_control:[u8;8] = [0,0,0,0,0,0,0,0];
+    let w_control = Bits::from_bits(&mut w_control).byte();
+    let ret:u8 = 0;
     cs.set_low();
     arduino_hal::delay_ms(1);
-    spi.send(v_addr[0]);
+    spi.send(w_addr[0]);
     arduino_hal::delay_ms(1);
-    spi.send(v_addr[1]);
+    spi.send(w_addr[1]);
     arduino_hal::delay_ms(1);
-    spi.send(v_control);
+    spi.send(w_control);
     arduino_hal::delay_ms(1);
-    spi.send(v);
+    spi.send(ret);
     arduino_hal::delay_ms(1);
     cs.set_high();
-    let v = spi.read();
+    let ret = spi.read();
     loop {
-        if let Ok(v) = v{
+        if let Ok(v) = ret{
             let byte = Bits::new(&v);
             for b in byte.bits_boolean(){
                 v_clock.set_high();
@@ -59,6 +80,7 @@ fn main() -> ! {
                 v_clock.set_low();
                 arduino_hal::delay_ms(1);
             }
+            arduino_hal::delay_ms(100);
             
         }
         else{
