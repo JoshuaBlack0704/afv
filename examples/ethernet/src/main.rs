@@ -5,7 +5,7 @@ use arduino_hal::{spi::SerialClockRate, prelude::_embedded_hal_spi_FullDuplex};
 use common_core::bits::Bits;
 use embedded_hal::{spi, digital::v2::OutputPin};
 use panic_halt as _;
-use w5500::{UninitializedDevice, bus::FourWire, MacAddress, net::Ipv4Addr, Mode};
+// use w5500::{UninitializedDevice, bus::FourWire, MacAddress, net::Ipv4Addr, Mode};
 
 #[arduino_hal::entry]
 fn main() -> ! {
@@ -27,15 +27,16 @@ fn main() -> ! {
     let (mut spi, mut cs) = arduino_hal::spi::Spi::new(spi, sclk, mosi, miso, cs, settings);
     arduino_hal::delay_ms(1000);
     cs.set_low().unwrap();
-    let v_addr:u8 = 0x0039;
+    let v_addr:u16 = 0x0039;
+    let v_addr = v_addr.to_be_bytes();
     let mut v_control:[u8;8] = [0,0,0,0,0,0,0,0];
     let v_control = Bits::from_bits(&mut v_control).byte();
     let v:u8 = 0;
     cs.set_low();
     arduino_hal::delay_ms(1);
-    spi.send(v);
+    spi.send(v_addr[0]);
     arduino_hal::delay_ms(1);
-    spi.send(v_addr);
+    spi.send(v_addr[1]);
     arduino_hal::delay_ms(1);
     spi.send(v_control);
     arduino_hal::delay_ms(1);

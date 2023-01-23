@@ -60,8 +60,8 @@ impl Bits{
     pub fn to_bits<T>(obj: &T, mem: &mut [Bits]){
         let mut bits = mem.iter_mut();
         let size = size_of::<T>();
-        let ptr = obj as *const T;
-        let ptr = ptr as *const u8;
+        let _ptr = obj as *const T;
+        let ptr = _ptr as *const u8;
         let bytes = unsafe{from_raw_parts(ptr, size)};
         for byte in bytes.iter(){
             if let Some(bits) = bits.next(){
@@ -71,7 +71,6 @@ impl Bits{
             break;
             
         }
-        
     }
     pub fn from_bits(bits: &mut [u8]) -> Bits {
         bits.reverse();
