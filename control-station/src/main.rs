@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use common_std::gndgui::{GuiElement, Tutorial};
 use eframe::egui::{self, ScrollArea};
-use flir::{Flir, SampleImage};
+use flir::{RtspStream, A50, SampleImage};
 use tokio::sync::{RwLock, Mutex};
 
 pub type GuiElmType = Arc<dyn GuiElement>;
@@ -23,8 +23,9 @@ impl Terminal {
     fn add_elements(&self){
         let mut elements = self.elements.blocking_write();
         let tutorial = Arc::new(Tutorial::new(String::from("Tutorial")));
-        let flir_source = SampleImage::new(String::from("sample-fire.jpg"));
-        let flir = Arc::new(Flir::new(flir_source, None));
+        // let flir_source = SampleImage::new(String::from("sample-fire.jpg"));
+        let flir_source = RtspStream::new("10.192.138.49");
+        let flir = Arc::new(A50::new(flir_source, None));
         flir.update_image_blocking();
         elements.push(tutorial);
         elements.push(flir);

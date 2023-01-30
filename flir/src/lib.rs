@@ -1,12 +1,17 @@
-use std::sync::Arc;
+use std::{sync::Arc, io::Cursor, net::ToSocketAddrs, fmt};
 
+use async_trait::async_trait;
 use common_std::gndgui::GuiElement;
 use eframe::{epaint::TextureHandle, egui::{Ui, Window}};
-use image::DynamicImage;
+use futures::StreamExt;
+use image::{DynamicImage, ImageBuffer, RgbImage};
 use image::io::Reader;
+use openh264::{decoder::Decoder, nal_units};
+use retina::client::{SessionOptions, self, SetupOptions, PlayOptions};
 use tokio::{sync::RwLock, runtime::Runtime};
+use url::Url;
 
-#[async_trait::async_trait]
+#[async_trait]
 pub trait DataSource{
     async fn get_encoded_image(&self) -> Vec<u8>;
     async fn get_image(&self) -> DynamicImage;
@@ -22,7 +27,87 @@ impl SampleImage{
     }
 }
 
-#[async_trait::async_trait]
+pub struct RtspStream{
+    url: Url,
+}
+
+impl RtspStream{
+    pub fn new<T:ToSocketAddrs + fmt::Display>(addr: T) -> RtspStream {
+        let url = Url::parse(&format!("rtsp://:@{}:554/avc/ch1", addr)).expect("Faulty ip addr");
+        Self{
+            url,
+        }
+    }
+}
+
+#[async_trait]
+impl DataSource for RtspStream{
+    async fn get_encoded_image(&self) -> Vec<u8> {
+        
+        let mut options = SessionOptions::default();
+        options = options.user_agent(String::from("Flir"));
+
+        let mut session = client::Session::describe(self.url.clone(), options).await.expect("Could not establish session with A50");
+        let options = SetupOptions::default();
+        session.setup(0, options).await.expect("Could not initiate stream with A50");
+        let options = PlayOptions::default();
+        let err = format!("Could not start playing string {}", 0);
+        let play = session.play(options).await.expect(&err);
+        let demux = play.demuxed().expect("Could not demux the playing stream");
+        tokio::pin!(demux);
+        if let Some(item) = demux.next().await{
+            match item{
+                Ok(e) => {
+                    match e{
+                        retina::codec::CodecItem::VideoFrame(v) => {
+                            return v.into_data();
+                        },
+                        retina::codec::CodecItem::AudioFrame(_) => todo!(),
+                        retina::codec::CodecItem::MessageFrame(_) => todo!(),
+                        retina::codec::CodecItem::Rtcp(_) => todo!(),
+                        _ => todo!(),
+                    }
+                },
+                Err(_) => todo!(),
+            }
+        }
+
+        todo!()
+    }
+
+    async fn get_image(&self) -> DynamicImage {
+        let encoded_image = self.get_encoded_image().await;
+        let mut decoder = Decoder::new().expect("Could not make decoder");
+        let mut size = (1,1);
+        let mut rgb = vec![0;size.0*size.1*3];
+        println!("{:?}", encoded_image);
+        for packet in nal_units(&encoded_image){
+            match decoder.decode(packet){
+                Ok(y) => {
+                    match y{
+                        Some(y) => {
+                            size = y.dimension_rgb();
+                            rgb = vec![0;size.0*size.1*3];
+                            y.write_rgb8(&mut rgb);
+                        },
+                        None => println!("Need more information to construct image"),
+                    }
+                },
+                Err(_) => {
+                    println!("Decode error");
+                },
+            };
+        };
+
+
+        let image:RgbImage = ImageBuffer::from_raw(size.0 as u32, size.1 as u32, rgb).expect("Could not translate to image crate");
+
+        DynamicImage::ImageRgb8(image)
+        
+    }
+}
+
+#[async_trait]
 impl DataSource for SampleImage{
     async fn get_encoded_image(&self) -> Vec<u8> {
         todo!()
@@ -32,7 +117,7 @@ impl DataSource for SampleImage{
         Reader::open(self.path.clone()).expect("Could not open sample IR image").decode().expect("Could not decode sample IR image")
     }
 }
-pub struct Flir<D>{
+pub struct A50<D>{
     source: D,    
     rt: Arc<Runtime>,
     image_data: RwLock<DynamicImage>,
@@ -40,12 +125,12 @@ pub struct Flir<D>{
     is_open: RwLock<bool>,
 }
 
-impl<D:DataSource> Flir<D>{
-    pub fn new(source: D, rt: Option<Arc<Runtime>>) -> Flir<D> {
+impl<D:DataSource> A50<D>{
+    pub fn new(source: D, rt: Option<Arc<Runtime>>) -> A50<D> {
         let rt = match rt{
             Some(r) => r,
             None => {
-                Arc::new(tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("Could not build tokio runtime"))
+                Arc::new(tokio::runtime::Builder::new_current_thread().enable_all().build().expect("Could not build tokio runtime"))
             },
         };
         Self{
@@ -90,7 +175,7 @@ impl<D:DataSource> Flir<D>{
     }
 }
 
-impl<D:DataSource> GuiElement for Flir<D>{
+impl<D:DataSource> GuiElement for A50<D>{
     fn name(&self) -> String {
         String::from("FLIR Cam")
     }
