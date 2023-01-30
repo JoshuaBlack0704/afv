@@ -13,3 +13,5 @@ url = "2.3.1"
 image = "0.24.5"
 eframe = "0.20.1"
 openh264 = "0.3.2"
+common_std = {path = "../common_std"}
+async-trait = "0.1.63"
