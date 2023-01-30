@@ -24,8 +24,8 @@ impl Terminal {
         let mut elements = self.elements.blocking_write();
         let tutorial = Arc::new(Tutorial::new(String::from("Tutorial")));
         // let flir_source = SampleImage::new(String::from("sample-fire.jpg"));
-        // let flir_source = RtspStream::new("10.192.138.49");
-        let flir_source = RtspStream::new_url("rtsp://ipvmdemo.dyndns.org:554/h264&basic_auth=");
+        let flir_source = RtspStream::new("10.192.138.49");
+        // let flir_source = RtspStream::new_url("rtsp://ipvmdemo.dyndns.org:554/h264&basic_auth=");
         let flir = Arc::new(A50::new(flir_source, None));
         flir.update_image_blocking();
         elements.push(tutorial);

@@ -1,4 +1,4 @@
-use std::{sync::Arc, io::Cursor, net::ToSocketAddrs, fmt, slice::from_raw_parts};
+use std::{sync::Arc, io::{Cursor, Read, Error}, net::ToSocketAddrs, fmt, slice::from_raw_parts};
 
 use async_trait::async_trait;
 use common_std::gndgui::GuiElement;
@@ -6,7 +6,7 @@ use eframe::{epaint::TextureHandle, egui::{Ui, Window}};
 use futures::StreamExt;
 use image::{DynamicImage, ImageBuffer, RgbImage};
 use image::io::Reader;
-use openh264::{decoder::Decoder, nal_units};
+use openh264::{decoder::Decoder, nal_units, to_bitstream_with_001_be};
 use retina::client::{SessionOptions, self, SetupOptions, PlayOptions};
 use tokio::{sync::RwLock, runtime::Runtime};
 use url::Url;
@@ -26,14 +26,19 @@ impl SampleImage{
         }
     }
 }
-
+#[derive(Debug)]
+pub enum AnnexConversionError{
+    NalLenghtParseError,
+    NalUnitExtendError,
+    IoError(Error),
+}
 pub struct RtspStream{
     url: Url,
 }
 
 impl RtspStream{
     pub fn new<T:ToSocketAddrs + fmt::Display>(addr: T) -> RtspStream {
-        let url = Url::parse(&format!("rtsp://:@{}:554/avc/ch1", addr)).expect("Faulty ip addr");
+        let url = Url::parse(&format!("rtsp://:@{}:554/avc", addr)).expect("Faulty ip addr");
         Self{
             url,
         }
@@ -42,6 +47,45 @@ impl RtspStream{
         Self{
             url: Url::parse(url).expect("Invalid url"),
         }
+    }
+    /// Converts from AVCC format to annex b format
+    pub fn avcc_to_annex_b_cursor(
+        data: &[u8],
+        nal_units: &mut Vec<u8>,
+    ) -> Result<(), AnnexConversionError> {
+        let mut data_cursor = Cursor::new(data);
+        let mut nal_lenght_bytes = [0u8; 4];
+        while let Ok(bytes_read) = data_cursor.read(&mut nal_lenght_bytes) {
+            if bytes_read == 0 {
+                break;
+            }
+            if bytes_read != nal_lenght_bytes.len() || bytes_read == 0 {
+                return Err(AnnexConversionError::NalLenghtParseError);
+            }
+            let nal_length = u32::from_be_bytes(nal_lenght_bytes) as usize;
+            nal_units.push(0);
+            nal_units.push(0);
+            nal_units.push(1);
+
+            if nal_length == 0 {
+                return Err(AnnexConversionError::NalLenghtParseError);
+            }
+            let mut nal_unit = vec![0u8; nal_length];
+            let bytes_read = data_cursor.read(&mut nal_unit);
+            match bytes_read {
+                Ok(bytes_read) => {
+                    nal_units.extend_from_slice(&nal_unit[0..bytes_read]);
+                    //TODO: this is never called so we don't ever detect EOF
+                    if bytes_read == 0 {
+                        break;
+                    } else if bytes_read < nal_unit.len() {
+                        return Err(AnnexConversionError::NalUnitExtendError);
+                    }
+                }
+                Err(e) => return Err(AnnexConversionError::IoError(e)),
+            };
+        }
+        Ok(())
     }
 }
 
@@ -54,70 +98,76 @@ impl DataSource for RtspStream{
         options = options.creds(Some(client::Credentials { username: String::from("demo"), password: String::from("demo") }));
 
         let mut session = client::Session::describe(self.url.clone(), options).await.expect("Could not establish session with A50");
-        let options = SetupOptions::default();
+        let mut options = SetupOptions::default();
+        options = options.transport(client::Transport::Udp(Default::default()));
         session.setup(0, options).await.expect("Could not initiate stream with A50");
         let options = PlayOptions::default();
         let err = format!("Could not start playing string {}", 0);
         let play = session.play(options).await.expect(&err);
+        // tokio::pin!(play);
+        // while let Some(y) = play.next().await{
+        //     let y:Vec<retina::rtcp::PacketRef> = match y.unwrap(){
+        //         client::PacketItem::Rtp(r) => continue,
+        //         client::PacketItem::Rtcp(r) => continue,
+        //         _ => todo!(),
+        //     };
+        //     for pkt in y.iter(){
+        //         let sender = pkt.as_sender_report().unwrap().unwrap();
+        //         println!("{:?}", sender.count());
+        //     }
+        // }
         let demux = play.demuxed().expect("Could not demux the playing stream");
         tokio::pin!(demux);
-        if let Some(item) = demux.next().await{
-            match item{
-                Ok(e) => {
-                    match e{
-                        retina::codec::CodecItem::VideoFrame(v) => {
-                            return v.into_data();
-                        },
-                        retina::codec::CodecItem::AudioFrame(_) => todo!(),
-                        retina::codec::CodecItem::MessageFrame(_) => todo!(),
-                        retina::codec::CodecItem::Rtcp(_) => todo!(),
-                        _ => todo!(),
-                    }
-                },
-                Err(_) => todo!(),
+        let mut encoded_frames:Vec<u8> = Vec::with_capacity(100000);
+        for _ in 0..50{
+            if let Some(item) = demux.next().await{
+                match item{
+                    Ok(e) => {
+                        match e{
+                            retina::codec::CodecItem::VideoFrame(v) => {
+                                println!("Got frame from flir");
+                                encoded_frames.extend_from_slice(v.data());
+                            },
+                            retina::codec::CodecItem::AudioFrame(_) => todo!(),
+                            retina::codec::CodecItem::MessageFrame(_) => todo!(),
+                            retina::codec::CodecItem::Rtcp(_) => continue,
+                            _ => todo!(),
+                        }
+                    },
+                    Err(_) => todo!(),
+                }
             }
         }
 
-        todo!()
+        encoded_frames
     }
 
     async fn get_image(&self) -> DynamicImage {
         let encoded_image = self.get_encoded_image().await;
         let mut nal:Vec<u8> = Vec::with_capacity(encoded_image.len());
-        let mut index = 0;
-        while let Some(byte) = encoded_image.get(index){
-            let ptr = byte as *const u8;
-            let ptr = ptr as *const u32;
-            let size = unsafe{from_raw_parts(ptr, 1)[0]} as usize;
-            index += 4;
-            let packet = &encoded_image[index..size+index];
-            nal.push(1);
-            nal.extend_from_slice(packet);
-            index += size;
-        }
+        // RtspStream::avcc_to_annex_b_cursor(&encouded_image, &mut nal).expect("Could not translate to annex b encoding");
+        to_bitstream_with_001_be::<u32>(&encoded_image, &mut nal);
         
         let mut decoder = Decoder::new().expect("Could not make decoder");
         let mut size = (1,1);
-        let mut rgb = vec![0;size.0*size.1*3];
-        println!("{:?}", encoded_image);
+        let mut rgb = vec![255,255,255];
         for packet in nal_units(&nal){
-            match decoder.decode(packet){
+            let res = decoder.decode(packet);
+            match res{
                 Ok(y) => {
                     match y{
-                        Some(y) => {
-                            size = y.dimension_rgb();
+                        Some(yuv) => {
+                            size = yuv.dimension_rgb();
                             rgb = vec![0;size.0*size.1*3];
-                            y.write_rgb8(&mut rgb);
+                            yuv.write_rgb8(&mut rgb);
+                            println!("Successful picture!");
                         },
-                        None => println!("Need more information to construct image"),
+                        None => println!("Not enough info for picture"),
                     }
                 },
-                Err(_) => {
-                    println!("Decode error");
-                },
-            };
-        };
-
+                Err(e) => println!("{}", e),
+            }
+        }
 
         let image:RgbImage = ImageBuffer::from_raw(size.0 as u32, size.1 as u32, rgb).expect("Could not translate to image crate");
 
