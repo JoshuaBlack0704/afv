@@ -1,4 +1,4 @@
-use std::{sync::Arc, io::Cursor, net::ToSocketAddrs, fmt};
+use std::{sync::Arc, io::Cursor, net::ToSocketAddrs, fmt, slice::from_raw_parts};
 
 use async_trait::async_trait;
 use common_std::gndgui::GuiElement;
@@ -38,6 +38,11 @@ impl RtspStream{
             url,
         }
     }
+    pub fn new_url(url: &str) -> RtspStream {
+        Self{
+            url: Url::parse(url).expect("Invalid url"),
+        }
+    }
 }
 
 #[async_trait]
@@ -45,7 +50,8 @@ impl DataSource for RtspStream{
     async fn get_encoded_image(&self) -> Vec<u8> {
         
         let mut options = SessionOptions::default();
-        options = options.user_agent(String::from("Flir"));
+        options = options.user_agent(String::from("demo"));
+        options = options.creds(Some(client::Credentials { username: String::from("demo"), password: String::from("demo") }));
 
         let mut session = client::Session::describe(self.url.clone(), options).await.expect("Could not establish session with A50");
         let options = SetupOptions::default();
@@ -77,11 +83,24 @@ impl DataSource for RtspStream{
 
     async fn get_image(&self) -> DynamicImage {
         let encoded_image = self.get_encoded_image().await;
+        let mut nal:Vec<u8> = Vec::with_capacity(encoded_image.len());
+        let mut index = 0;
+        while let Some(byte) = encoded_image.get(index){
+            let ptr = byte as *const u8;
+            let ptr = ptr as *const u32;
+            let size = unsafe{from_raw_parts(ptr, 1)[0]} as usize;
+            index += 4;
+            let packet = &encoded_image[index..size+index];
+            nal.push(1);
+            nal.extend_from_slice(packet);
+            index += size;
+        }
+        
         let mut decoder = Decoder::new().expect("Could not make decoder");
         let mut size = (1,1);
         let mut rgb = vec![0;size.0*size.1*3];
         println!("{:?}", encoded_image);
-        for packet in nal_units(&encoded_image){
+        for packet in nal_units(&nal){
             match decoder.decode(packet){
                 Ok(y) => {
                     match y{
