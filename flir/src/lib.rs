@@ -1,224 +1,262 @@
-use std::{sync::Arc, io::{Cursor, Read, Error}, net::ToSocketAddrs, fmt, slice::from_raw_parts};
+use std::{
+    fmt,
+    io::{Cursor, Error, Read},
+    net::ToSocketAddrs,
+    slice::from_raw_parts,
+    sync::Arc, cmp::Ordering,
+};
 
 use async_trait::async_trait;
 use common_std::gndgui::GuiElement;
-use eframe::{epaint::TextureHandle, egui::{Ui, Window}};
+use eframe::{
+    egui::{Ui, Window},
+    epaint::TextureHandle,
+};
 use futures::StreamExt;
-use image::{DynamicImage, ImageBuffer, RgbImage};
-use image::io::Reader;
+use glam::Vec2;
+use image::{io::Reader, DynamicImage, GenericImageView, ImageBuffer, GenericImage, Rgba};
 use openh264::{decoder::Decoder, nal_units, to_bitstream_with_001_be};
-use retina::client::{SessionOptions, self, SetupOptions, PlayOptions};
-use tokio::{sync::RwLock, runtime::Runtime};
+use retina::client::{self, PlayOptions, SessionOptions, SetupOptions};
+use tokio::time::Duration;
+use tokio::{runtime::Runtime, sync::RwLock, time::sleep};
 use url::Url;
 
 #[async_trait]
-pub trait DataSource{
-    async fn get_encoded_image(&self) -> Vec<u8>;
+pub trait DataSource: Send + Sync {
     async fn get_image(&self) -> DynamicImage;
 }
-pub struct SampleImage{
+pub struct SampleImage {
     path: String,
 }
-impl SampleImage{
+impl SampleImage {
     pub fn new(path: String) -> SampleImage {
-        Self{
-            path,
-        }
+        Self { path }
     }
 }
 #[derive(Debug)]
-pub enum AnnexConversionError{
+pub enum AnnexConversionError {
     NalLenghtParseError,
     NalUnitExtendError,
     IoError(Error),
 }
-pub struct RtspStream{
+pub struct RtspStream {
     url: Url,
+    oversample: u32,
 }
 
-impl RtspStream{
-    pub fn new<T:ToSocketAddrs + fmt::Display>(addr: T) -> RtspStream {
+impl RtspStream {
+    pub fn new<T: ToSocketAddrs + fmt::Display>(addr: T, oversample: u32) -> RtspStream {
         let url = Url::parse(&format!("rtsp://:@{}:554/avc", addr)).expect("Faulty ip addr");
-        Self{
-            url,
-        }
+        Self { url, oversample }
     }
-    pub fn new_url(url: &str) -> RtspStream {
-        Self{
+    pub fn new_url(url: &str, oversample: u32) -> RtspStream {
+        Self {
             url: Url::parse(url).expect("Invalid url"),
+            oversample,
         }
-    }
-    /// Converts from AVCC format to annex b format
-    pub fn avcc_to_annex_b_cursor(
-        data: &[u8],
-        nal_units: &mut Vec<u8>,
-    ) -> Result<(), AnnexConversionError> {
-        let mut data_cursor = Cursor::new(data);
-        let mut nal_lenght_bytes = [0u8; 4];
-        while let Ok(bytes_read) = data_cursor.read(&mut nal_lenght_bytes) {
-            if bytes_read == 0 {
-                break;
-            }
-            if bytes_read != nal_lenght_bytes.len() || bytes_read == 0 {
-                return Err(AnnexConversionError::NalLenghtParseError);
-            }
-            let nal_length = u32::from_be_bytes(nal_lenght_bytes) as usize;
-            nal_units.push(0);
-            nal_units.push(0);
-            nal_units.push(1);
-
-            if nal_length == 0 {
-                return Err(AnnexConversionError::NalLenghtParseError);
-            }
-            let mut nal_unit = vec![0u8; nal_length];
-            let bytes_read = data_cursor.read(&mut nal_unit);
-            match bytes_read {
-                Ok(bytes_read) => {
-                    nal_units.extend_from_slice(&nal_unit[0..bytes_read]);
-                    //TODO: this is never called so we don't ever detect EOF
-                    if bytes_read == 0 {
-                        break;
-                    } else if bytes_read < nal_unit.len() {
-                        return Err(AnnexConversionError::NalUnitExtendError);
-                    }
-                }
-                Err(e) => return Err(AnnexConversionError::IoError(e)),
-            };
-        }
-        Ok(())
     }
 }
 
 #[async_trait]
-impl DataSource for RtspStream{
-    async fn get_encoded_image(&self) -> Vec<u8> {
-        
+impl DataSource for RtspStream {
+    async fn get_image(&self) -> DynamicImage {
+        // We must first attempt to stream an image from the flir
         let mut options = SessionOptions::default();
         options = options.user_agent(String::from("demo"));
-        options = options.creds(Some(client::Credentials { username: String::from("demo"), password: String::from("demo") }));
 
-        let mut session = client::Session::describe(self.url.clone(), options).await.expect("Could not establish session with A50");
-        let mut options = SetupOptions::default();
-        options = options.transport(client::Transport::Udp(Default::default()));
-        session.setup(0, options).await.expect("Could not initiate stream with A50");
+        let mut session = client::Session::describe(self.url.clone(), options)
+            .await
+            .expect("Could not establish session with A50");
+        let options = SetupOptions::default();
+        session
+            .setup(0, options)
+            .await
+            .expect("Could not initiate stream with A50");
         let options = PlayOptions::default();
         let err = format!("Could not start playing string {}", 0);
         let play = session.play(options).await.expect(&err);
-        // tokio::pin!(play);
-        // while let Some(y) = play.next().await{
-        //     let y:Vec<retina::rtcp::PacketRef> = match y.unwrap(){
-        //         client::PacketItem::Rtp(r) => continue,
-        //         client::PacketItem::Rtcp(r) => continue,
-        //         _ => todo!(),
-        //     };
-        //     for pkt in y.iter(){
-        //         let sender = pkt.as_sender_report().unwrap().unwrap();
-        //         println!("{:?}", sender.count());
-        //     }
-        // }
         let demux = play.demuxed().expect("Could not demux the playing stream");
         tokio::pin!(demux);
-        let mut encoded_frames:Vec<u8> = Vec::with_capacity(100000);
-        for _ in 0..50{
-            if let Some(item) = demux.next().await{
-                match item{
-                    Ok(e) => {
-                        match e{
-                            retina::codec::CodecItem::VideoFrame(v) => {
-                                println!("Got frame from flir");
-                                encoded_frames.extend_from_slice(v.data());
-                            },
-                            retina::codec::CodecItem::AudioFrame(_) => todo!(),
-                            retina::codec::CodecItem::MessageFrame(_) => todo!(),
-                            retina::codec::CodecItem::Rtcp(_) => continue,
-                            _ => todo!(),
+
+        // Now we will pull frames until we can build a successful picture
+        let mut encoded_frames: Vec<u8> = Vec::with_capacity(100000);
+        let mut nal_packets = Vec::with_capacity(100000);
+        let mut rgb_image = None;
+        let mut decoder = Decoder::new().expect("Could not make decoder");
+        let mut successes = 0;
+        while let None = rgb_image {
+            let frame = demux.next().await;
+            let frame = match frame {
+                Some(f) => f,
+                None => continue,
+            };
+
+            match frame {
+                Ok(f) => {
+                    match f {
+                        retina::codec::CodecItem::VideoFrame(v) => {
+                            // println!("Successfully received frame");
+                            encoded_frames.extend_from_slice(v.data());
                         }
+                        retina::codec::CodecItem::AudioFrame(_) => {}
+                        retina::codec::CodecItem::MessageFrame(_) => {}
+                        retina::codec::CodecItem::Rtcp(_) => {}
+                        _ => {}
+                    }
+                }
+                Err(_) => {
+                    println!("Get image error");
+                    break;
+                }
+            }
+
+            nal_packets.clear();
+
+            to_bitstream_with_001_be::<u32>(&encoded_frames, &mut nal_packets);
+
+            println!(
+                "Attempting decode with {} nal packets",
+                nal_units(&nal_packets).count()
+            );
+
+            for packet in nal_units(&nal_packets) {
+                match decoder.decode(packet) {
+                    Ok(y) => match y {
+                        Some(y) => {
+                            if successes < self.oversample {
+                                successes += 1;
+                            } else {
+                                let image_size = y.dimension_rgb();
+                                let mut rgb_data = vec![0; image_size.0 * image_size.1 * 3];
+                                y.write_rgb8(&mut rgb_data);
+                                rgb_image = Some(DynamicImage::ImageRgb8(
+                                    ImageBuffer::from_raw(
+                                        image_size.0 as u32,
+                                        image_size.1 as u32,
+                                        rgb_data,
+                                    )
+                                    .expect("Could not translate to image crate"),
+                                ));
+                            }
+                            println!("Successful picture decode!");
+                        }
+                        None => {}
                     },
-                    Err(_) => todo!(),
+                    Err(_) => {}
                 }
             }
         }
 
-        encoded_frames
-    }
-
-    async fn get_image(&self) -> DynamicImage {
-        let encoded_image = self.get_encoded_image().await;
-        let mut nal:Vec<u8> = Vec::with_capacity(encoded_image.len());
-        // RtspStream::avcc_to_annex_b_cursor(&encouded_image, &mut nal).expect("Could not translate to annex b encoding");
-        to_bitstream_with_001_be::<u32>(&encoded_image, &mut nal);
-        
-        let mut decoder = Decoder::new().expect("Could not make decoder");
-        let mut size = (1,1);
-        let mut rgb = vec![255,255,255];
-        for packet in nal_units(&nal){
-            let res = decoder.decode(packet);
-            match res{
-                Ok(y) => {
-                    match y{
-                        Some(yuv) => {
-                            size = yuv.dimension_rgb();
-                            rgb = vec![0;size.0*size.1*3];
-                            yuv.write_rgb8(&mut rgb);
-                            println!("Successful picture!");
-                        },
-                        None => println!("Not enough info for picture"),
-                    }
-                },
-                Err(e) => println!("{}", e),
+        match rgb_image {
+            Some(i) => {
+                return i;
+            }
+            None => {
+                println!("Failed to get image");
+                let image_size = (1, 1);
+                let rgb_data = vec![255, 255, 255];
+                return DynamicImage::ImageRgb8(
+                    ImageBuffer::from_raw(image_size.0 as u32, image_size.1 as u32, rgb_data)
+                        .expect("Could not translate to image crate"),
+                );
             }
         }
-
-        let image:RgbImage = ImageBuffer::from_raw(size.0 as u32, size.1 as u32, rgb).expect("Could not translate to image crate");
-
-        DynamicImage::ImageRgb8(image)
-        
     }
 }
 
 #[async_trait]
-impl DataSource for SampleImage{
-    async fn get_encoded_image(&self) -> Vec<u8> {
-        todo!()
-    }
-
+impl DataSource for SampleImage {
     async fn get_image(&self) -> DynamicImage {
-        Reader::open(self.path.clone()).expect("Could not open sample IR image").decode().expect("Could not decode sample IR image")
+        Reader::open(self.path.clone())
+            .expect("Could not open sample IR image")
+            .decode()
+            .expect("Could not decode sample IR image")
     }
 }
-pub struct A50<D>{
-    source: D,    
+pub struct A50<D> {
+    source: D,
     rt: Arc<Runtime>,
     image_data: RwLock<DynamicImage>,
     gui_image: RwLock<Option<TextureHandle>>,
     is_open: RwLock<bool>,
+    refresh_toggle: RwLock<Option<Arc<bool>>>,
+    best_dir: RwLock<f32>,
 }
 
-impl<D:DataSource> A50<D>{
+impl<D: DataSource + 'static> A50<D> {
     pub fn new(source: D, rt: Option<Arc<Runtime>>) -> A50<D> {
-        let rt = match rt{
+        let rt = match rt {
             Some(r) => r,
-            None => {
-                Arc::new(tokio::runtime::Builder::new_current_thread().enable_all().build().expect("Could not build tokio runtime"))
-            },
+            None => Arc::new(
+                tokio::runtime::Builder::new_multi_thread()
+                    .enable_all()
+                    .build()
+                    .expect("Could not build tokio runtime"),
+            ),
         };
-        Self{
+        Self {
             source,
             image_data: RwLock::new(DynamicImage::new_rgb8(1024, 920)),
             gui_image: RwLock::new(None),
             is_open: RwLock::new(false),
             rt,
+            refresh_toggle: RwLock::new(None),
+            best_dir: RwLock::new(0.0),
         }
     }
-    fn ui(&self, ui: &mut Ui){
+    pub async fn update_best_dir(a50: Arc<Self>) {
+        let mut image = a50.image_data.write().await;
+        let mut vectors = vec![];
+        let mut pixels = Vec::with_capacity(image.as_bytes().len()/3);
+        for pix in image.clone().pixels() {
+            if pix.2[0] < 100 {
+                let mut pix = pix.clone();
+                pix.2[0] = 0;
+                pix.2[1] = 0;
+                pix.2[2] = 0;
+                image.put_pixel(pix.0, pix.1, pix.2);
+                continue;
+            }
+            pixels.push(pix);
+        }
+        if pixels.len() == 0{
+            return;
+        }
+
+        pixels.sort_unstable_by(|a,b| {
+            if a.1 > b.1{
+                return Ordering::Less;
+            }
+            if a.1 == b.1{
+                return Ordering::Equal;
+            }
+            Ordering::Greater
+        });
+
+        let mut top_index = pixels.len() - 1;
+        let mut bottom_index = 0;
+        while top_index > bottom_index{
+            let top_pix = pixels[top_index];
+            let bottom_pix = pixels[bottom_index];
+            let top_pos = Vec2::new(top_pix.0 as f32, top_pix.1 as f32);
+            let bottom_pos = Vec2::new(bottom_pix.0 as f32, bottom_pix.1 as f32);
+            vectors.push(top_pos - bottom_pos);
+            top_index -= 1;
+            bottom_index += 1;
+        }
+        
+        let total_vec: Vec2 = vectors.iter().sum();
+        *a50.best_dir.write().await = -(total_vec / vectors.len() as f32).x;
+    }
+    fn ui(&self, ui: &mut Ui) {
         let texture = self.load_gui_image(ui);
         let size = ui.available_size();
         ui.image(texture.id(), size);
-        
+        ui.label(self.best_dir.blocking_read().to_string());
     }
-    fn load_gui_image(&self, ui: &Ui) -> TextureHandle{
+    fn load_gui_image(&self, ui: &Ui) -> TextureHandle {
         let mut gui_image = self.gui_image.blocking_write();
-        if let Some(i) =  &(*gui_image){
+        if let Some(i) = &(*gui_image) {
             return i.clone();
         }
 
@@ -227,24 +265,39 @@ impl<D:DataSource> A50<D>{
         let pixels = image.as_flat_samples();
         let size = [image.width() as usize, image.height() as usize];
         let color_image = eframe::egui::ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
-        let texture = ui.ctx().load_texture("Flir output", color_image, Default::default());
+        let texture = ui
+            .ctx()
+            .load_texture("Flir output", color_image, Default::default());
         *gui_image = Some(texture.clone());
         texture
-        
     }
-    pub async fn update_image(&self){
+    pub async fn update_image(&self) {
         let image_data = self.source.get_image().await;
         let mut image_lock = self.image_data.write().await;
         let mut gui_lock = self.gui_image.write().await;
         *image_lock = image_data;
         *gui_lock = None;
     }
-    pub fn update_image_blocking(&self){
+    pub fn update_image_blocking(&self) {
         self.rt.block_on(self.update_image());
+    }
+    pub fn refresh_interval(a50: Arc<Self>, interval: Duration) {
+        let toggle = Arc::new(false);
+        a50.rt
+            .spawn(A50::refresh_task(a50.clone(), interval, toggle.clone()));
+        let mut toggle_lock = a50.refresh_toggle.blocking_write();
+        *toggle_lock = Some(toggle);
+    }
+    pub async fn refresh_task(a50: Arc<Self>, inerval: Duration, toggle: Arc<bool>) {
+        while Arc::strong_count(&toggle) > 1 {
+            sleep(inerval).await;
+            a50.update_image().await;
+            A50::update_best_dir(a50.clone()).await;
+        }
     }
 }
 
-impl<D:DataSource> GuiElement for A50<D>{
+impl<D: DataSource + 'static> GuiElement for A50<D> {
     fn name(&self) -> String {
         String::from("FLIR Cam")
     }
@@ -252,12 +305,12 @@ impl<D:DataSource> GuiElement for A50<D>{
     fn render(&self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
         let mut open = true;
         Window::new(self.name())
-        .open(&mut open)
-        .constrain(true)
-        .hscroll(true)
-        .vscroll(true)
-        .resizable(true)
-        .show(ctx, |ui| self.ui(ui));
+            .open(&mut open)
+            .constrain(true)
+            .hscroll(true)
+            .vscroll(true)
+            .resizable(true)
+            .show(ctx, |ui| self.ui(ui));
         self.set_open(open);
     }
 
