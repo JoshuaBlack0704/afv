@@ -1,9 +1,8 @@
 use std::{
     fmt,
-    io::{Cursor, Error, Read},
+    io::Error,
     net::ToSocketAddrs,
-    slice::from_raw_parts,
-    sync::Arc, cmp::Ordering,
+    sync::Arc, cmp::Ordering, collections::HashSet,
 };
 
 use async_trait::async_trait;
@@ -14,7 +13,7 @@ use eframe::{
 };
 use futures::StreamExt;
 use glam::Vec2;
-use image::{io::Reader, DynamicImage, GenericImageView, ImageBuffer, GenericImage, Rgba};
+use image::{io::Reader, DynamicImage, GenericImageView, ImageBuffer, GenericImage};
 use openh264::{decoder::Decoder, nal_units, to_bitstream_with_001_be};
 use retina::client::{self, PlayOptions, SessionOptions, SetupOptions};
 use tokio::time::Duration;
@@ -180,7 +179,8 @@ pub struct A50<D> {
     gui_image: RwLock<Option<TextureHandle>>,
     is_open: RwLock<bool>,
     refresh_toggle: RwLock<Option<Arc<bool>>>,
-    best_dir: RwLock<f32>,
+    best_dir_mean: RwLock<f32>,
+    best_dir_median: RwLock<f32>,
 }
 
 impl<D: DataSource + 'static> A50<D> {
@@ -201,10 +201,11 @@ impl<D: DataSource + 'static> A50<D> {
             is_open: RwLock::new(false),
             rt,
             refresh_toggle: RwLock::new(None),
-            best_dir: RwLock::new(0.0),
+            best_dir_mean: RwLock::new(0.0),
+            best_dir_median: RwLock::new(0.0),
         }
     }
-    pub async fn update_best_dir(a50: Arc<Self>) {
+    pub async fn update_best_dir_mean(a50: Arc<Self>) {
         let mut image = a50.image_data.write().await;
         let mut vectors = vec![];
         let mut pixels = Vec::with_capacity(image.as_bytes().len()/3);
@@ -246,13 +247,67 @@ impl<D: DataSource + 'static> A50<D> {
         }
         
         let total_vec: Vec2 = vectors.iter().sum();
-        *a50.best_dir.write().await = -(total_vec / vectors.len() as f32).x;
+        *a50.best_dir_mean.write().await = -(total_vec / vectors.len() as f32).x;
+    }
+    pub async fn update_best_dir_median(a50: Arc<Self>) {
+        let mut image = a50.image_data.write().await;
+        let mut vectors = vec![];
+        let mut pixels = Vec::with_capacity(image.as_bytes().len()/3);
+        for pix in image.clone().pixels() {
+            if pix.2[0] < 100 {
+                let mut pix = pix.clone();
+                pix.2[0] = 0;
+                pix.2[1] = 0;
+                pix.2[2] = 0;
+                image.put_pixel(pix.0, pix.1, pix.2);
+                continue;
+            }
+            pixels.push(pix);
+        }
+        if pixels.len() == 0{
+            return;
+        }
+
+        let mut y_vals = HashSet::new();
+        for pix in pixels.iter(){
+            y_vals.insert(pix.1);
+        }
+
+        let mut y_vals:Vec<(u32, u32)> = y_vals.iter().map(|v| (0, *v)).collect();
+        y_vals.sort_unstable();
+        y_vals.reverse();
+        for (median, y_val) in y_vals.iter_mut(){
+            let mut x_vals:Vec<u32> = pixels.iter().filter(|pix| pix.1 == *y_val).map(|pix| pix.0).collect();
+            x_vals.sort_unstable();
+            *median = x_vals[x_vals.len()/2];
+        }
+        
+        let mut top_index = y_vals.len() - 1;
+        let mut bottom_index = 0;
+        while top_index > bottom_index{
+            let top_pos = y_vals[top_index];
+            let bottom_pos = y_vals[bottom_index];
+            let top_pos = Vec2::new(top_pos.0 as f32, top_pos.1 as f32);
+            let bottom_pos = Vec2::new(bottom_pos.0 as f32, bottom_pos.1 as f32);
+            // Remember, images are indexed from the top-left to bottom-right
+            let vec = top_pos - bottom_pos;
+            vectors.push(vec);
+            top_index -= 1;
+            bottom_index += 1;
+        }
+        
+        let total_vec: Vec2 = vectors.iter().sum();
+        *a50.best_dir_median.write().await = -(total_vec / vectors.len() as f32).x;
+    }
+    async fn is_open_async(&self) -> bool {
+        *self.is_open.read().await
     }
     fn ui(&self, ui: &mut Ui) {
         let texture = self.load_gui_image(ui);
-        let size = ui.available_size();
+        let size = ui.available_size()*0.75;
         ui.image(texture.id(), size);
-        ui.label(self.best_dir.blocking_read().to_string());
+        ui.label(format!("Mean recommended dir: {}", self.best_dir_mean.blocking_read()));
+        ui.label(format!("Median recommended dir: {}", self.best_dir_median.blocking_read()));
     }
     fn load_gui_image(&self, ui: &Ui) -> TextureHandle {
         let mut gui_image = self.gui_image.blocking_write();
@@ -291,8 +346,11 @@ impl<D: DataSource + 'static> A50<D> {
     pub async fn refresh_task(a50: Arc<Self>, inerval: Duration, toggle: Arc<bool>) {
         while Arc::strong_count(&toggle) > 1 {
             sleep(inerval).await;
-            a50.update_image().await;
-            A50::update_best_dir(a50.clone()).await;
+            if a50.is_open_async().await{
+                a50.update_image().await;
+                A50::update_best_dir_mean(a50.clone()).await;
+                A50::update_best_dir_median(a50.clone()).await;
+            }
         }
     }
 }
@@ -302,7 +360,7 @@ impl<D: DataSource + 'static> GuiElement for A50<D> {
         String::from("FLIR Cam")
     }
 
-    fn render(&self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
+    fn render(&self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
         let mut open = true;
         Window::new(self.name())
             .open(&mut open)

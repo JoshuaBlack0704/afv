@@ -1,6 +1,4 @@
-use std::sync::Arc;
-
-use eframe::egui::{Ui, self, ScrollArea, Window, CentralPanel};
+use eframe::egui::{Ui, self, Window};
 use tokio::sync::RwLock;
 
 pub trait GuiElement{
@@ -41,7 +39,7 @@ impl GuiElement for Tutorial{
         self.name.clone()
     }
 
-    fn render(&self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn render(&self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let mut open = true;
         Window::new(self.name.clone())
         .open(&mut open)

@@ -27,7 +27,7 @@ async fn stream()
         let mut play = play.demuxed().expect("Could not demux the playing stream");
         while let Some(item) = play.next().await{
             match item{
-                Ok(e) => {
+                Ok(_) => {
                 
             },
                 Err(_) => todo!(),
