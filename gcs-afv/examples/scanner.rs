@@ -15,17 +15,18 @@ fn main(){
 }
 
 async fn pulse(){
-    let sleep_time = tokio::time::Duration::from_secs(1);
-    let ip = local_ip_address::local_ip().expect("Could not get local ip");
-    let ip = match ip{
-        std::net::IpAddr::V4(i) => i,
-        std::net::IpAddr::V6(i) => i.to_ipv4().unwrap(),
-    };
-    let ethernet = EthernetBus::server((ip, GCSPORT)).await.expect("Could not run server");
-    for i in 0..2{
-        let msg = NetworkMessage::String(format!("Hello from server msg {}", i));
-        ethernet.send(msg).await;
-        sleep(sleep_time).await;
+    loop{
+        let sleep_time = tokio::time::Duration::from_secs(1);
+        let ip = local_ip_address::local_ip().expect("Could not get local ip");
+        let ip = match ip{
+            std::net::IpAddr::V4(i) => i,
+            std::net::IpAddr::V6(i) => i.to_ipv4().unwrap(),
+        };
+        let ethernet = EthernetBus::server((ip, GCSPORT)).await.expect("Could not run server");
+        for i in 0..2{
+            let msg = NetworkMessage::String(format!("Hello from server msg {}", i));
+            ethernet.send(msg).await;
+            sleep(sleep_time).await;
+        }
     }
-    println!("Done!");
 }

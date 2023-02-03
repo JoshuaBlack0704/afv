@@ -14,6 +14,7 @@ pub trait GuiArgs{
 
 pub struct Terminal{
     elements: Vec<Arc<dyn GuiElement>>,
+    continuous_refresh: RwLock<bool>,
 }
 
 pub struct TerminalBuilder{
@@ -60,7 +61,10 @@ impl TerminalBuilder{
     }
     pub fn build(self, _cc: &eframe::CreationContext<'_>, _args: Arc<impl GuiArgs>) -> Box<Terminal> {
 
-        Box::new(Terminal{elements: self.elements})
+        Box::new(Terminal{
+            elements: self.elements,
+            continuous_refresh: RwLock::new(true),
+        })
         
     }
     pub fn launch(self, args: &Arc<impl GuiArgs + 'static>){
@@ -73,6 +77,8 @@ impl TerminalBuilder{
 impl Terminal{
     fn side_panel(&self, ctx: &egui::Context){
         let list_elements = |ui: &mut Ui| {
+            let mut refresh = self.refresh();
+            ui.toggle_value(&mut refresh, "Continouous refersh");
             for e in self.elements.iter(){
                 let mut open = e.open();
                 ui.toggle_value(&mut open, e.name());
@@ -101,13 +107,18 @@ impl Terminal{
 
         egui::CentralPanel::default().show(ctx, display_elements);
     }
+    fn refresh(&self) -> RwLockWriteGuard<bool> {
+        self.continuous_refresh.blocking_write()
+    }
 }
 
 impl eframe::App for Terminal{
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
         self.side_panel(ctx);
         self.central_panel(ctx);
-        ctx.request_repaint();
+        if *self.refresh(){
+            ctx.request_repaint();
+        }
     }
     
 }
