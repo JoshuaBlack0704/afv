@@ -1,9 +1,9 @@
-use std::{net::Ipv4Addr, sync::Arc};
+use std::{net::{Ipv4Addr, IpAddr}, sync::Arc};
 
 use eframe::egui::{Ui, self};
 use tokio::{sync::{RwLock, Mutex}, runtime::Runtime};
 
-use crate::{gui::GuiElement, network::AFVPORT};
+use crate::{gui::GuiElement, network::{AFVPORT, EthernetBus, NetworkMessage, NetworkLogger}};
 
 #[derive(Clone, Copy)]
 pub enum ScannerState{
@@ -19,6 +19,8 @@ pub struct Scanner{
     port_range: Mutex<(u16, u16)>,
     state: RwLock<ScannerState>,
     open: RwLock<bool>,
+    target_count: RwLock<usize>,
+    connects: RwLock<Vec<Arc<EthernetBus<NetworkMessage>>>>,
 }
 
 impl Scanner{
@@ -27,15 +29,28 @@ impl Scanner{
             Some(rt) => rt,
             None => Arc::new(tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("Could not construct runtime for scanenr")),
         };
+
+        let ip = match local_ip_address::local_ip(){
+            Ok(ip) => {
+                let mut res = Ipv4Addr::new(192,168,1,1);
+                if let IpAddr::V4(i) = ip{
+                    res = i
+                }
+                res
+            },
+            Err(_) => Ipv4Addr::new(192,168,1,1),
+        };
         
         Arc::new(
             Self{
-                gateway: Mutex::new(Ipv4Addr::new(192,196,1,0)),
+                gateway: Mutex::new(ip),
                 subnet: Mutex::new(Ipv4Addr::new(255,255,255,0)),
                 port_range: Mutex::new((AFVPORT, AFVPORT)),
                 state: RwLock::new(ScannerState::Available),
                 rt,
                 open: RwLock::new(false),
+                target_count: RwLock::new(0),
+                connects: RwLock::new(vec![]),
             }
         )
     }
@@ -105,34 +120,124 @@ impl Scanner{
         
         
             let port_count:u64 = (port_range.0..=port_range.1).count() as u64;
-            let mut subnet = u32::from_be_bytes(s_octets);
+            let mut subnet_number = u32::from_be_bytes(s_octets);
             let mut subnet_bits:u32 = 0;
             
             for _ in 0..u32::BITS{
-                if subnet & 1 == 0{
+                if subnet_number & 1 == 0{
                     subnet_bits += 1;
                 }
-                subnet >>= 1;
+                subnet_number >>= 1;
             }
 
             let count = port_count * 2u64.pow(subnet_bits);
             let count = format!("Total targets: {}", count);
         
             ui.label(count);
+            if ui.button("Loopback").clicked(){
+                *gateway = Ipv4Addr::new(127,0,0,1);
+                *subnet = Ipv4Addr::new(255,255,255,255);
+            }
             if ui.button("Start").clicked(){
-                *state = ScannerState::Dispatched;
                 self.rt.spawn(self.clone().dispatch());
             }; 
         });
     }
     fn dispatched_ui(self: &Arc<Self>, ui: &mut Ui){
+        let gateway = self.gateway.blocking_lock().octets();
+        let subnet = self.subnet.blocking_lock().octets();
+        let port_range = *self.port_range.blocking_lock();
+
+        let gateway = format!("Gatway: {}.{}.{}.{}", gateway[0], gateway[1], gateway[2], gateway[3]);
+        let subnet = format!("Subnet: {}.{}.{}.{}", subnet[0], subnet[1], subnet[2], subnet[3]);
+        let port_range = format!("Port Range: {}-{}", port_range.0, port_range.1);
+        let targets_remaining = format!("Remaining targets: {}", *self.target_count.blocking_read());
+        let successful_connects = format!("Successful connections: {}", self.connects.blocking_read().len());
+
+        ui.vertical_centered(|ui|{
+            ui.label(gateway);
+            ui.label(subnet);
+            ui.label(port_range);
+            ui.label(targets_remaining);
+            ui.label(successful_connects);
+        });
         
     }
     fn completed_ui(self: &Arc<Self>, ui: &mut Ui){
-        
+        let targets_remaining = format!("targets scanned: {}", *self.target_count.blocking_read());
+        let successful_connects = format!("Successful connections: {}", self.connects.blocking_read().len());
+        ui.vertical_centered(|ui|{
+            ui.label(targets_remaining);
+            ui.label(successful_connects);
+            if ui.button("Restart").clicked(){
+                *self.state.blocking_write() = ScannerState::Available;
+                *self.target_count.blocking_write() = 0;
+                self.connects.blocking_write().clear();
+            }
+        });
     }
     async fn dispatch(self: Arc<Self>){
+        *self.state.write().await = ScannerState::Dispatched;
+        let gateway = self.gateway.lock().await.octets();
+        let subnet = self.subnet.lock().await.octets();
+        let port_range = *self.port_range.lock().await;
+        let port_count = (port_range.0..=port_range.1).count();
+
+        let mut octet_matches = [vec![], vec![], vec![], vec![]];
+
+        let mut targets = vec![];
+
+        for o in 0..gateway.len(){
+            let g_octet = gateway[o];
+            let s_octet = subnet[o];
+
+            for ip in 0..=u8::MAX{
+                if ip & s_octet == g_octet & s_octet{
+                    octet_matches[o].push(ip);
+                }
+            }
+        }
+
+        for o0 in octet_matches[0].iter(){
+            for o1 in octet_matches[1].iter(){
+                for o2 in octet_matches[2].iter(){
+                    for o3 in octet_matches[3].iter(){
+                       targets.push(Ipv4Addr::new(*o0,*o1,*o2,*o3)); 
+                        println!("Adding target: {}", targets.last().unwrap());
+                    }
+                }
+            }
+        }
+
+        let target_count = targets.len() * port_count;
+        *self.target_count.write().await = target_count;
+
+        let (tx, rx) = flume::unbounded();
+
+        for t in targets.iter(){
+            for p in port_range.0..=port_range.1{
+                tokio::spawn(Self::attempt_connect(tx.clone(), *t, p, self.clone()));
+            }
+        }
+
+        drop(tx);
         
+        while let Ok(bus) = rx.recv_async().await{
+            self.connects.write().await.push(bus);
+        }
+
+        *self.target_count.write().await = target_count;
+
+        *self.state.write().await = ScannerState::Complete;
+    }
+
+    async fn attempt_connect(tx: flume::Sender<Arc<EthernetBus<NetworkMessage>>>, ip: Ipv4Addr, port: u16, scanner: Arc<Scanner>){
+        let addr = (ip, port);
+        if let Ok(bus) = EthernetBus::new(&addr).await{
+            NetworkLogger::new(&bus).await;
+            let _ = tx.send_async(bus).await;
+        }
+        *scanner.target_count.write().await -= 1;
     }
 }
 

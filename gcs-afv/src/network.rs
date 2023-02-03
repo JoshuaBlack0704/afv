@@ -3,6 +3,7 @@ use std::{fmt::Debug, io::Error, mem::size_of, sync::Arc};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpSocket;
 use tokio::{
     net::{
         tcp::{OwnedReadHalf, OwnedWriteHalf},
@@ -14,9 +15,11 @@ use tokio::{
 };
 
 /// The port that gcs's will use to communicate on their network
-pub const GCSPORT: u32 = 60000;
+pub const GCSPORT: u16 = 60000;
 /// The port that the ethernet transeivers for the afv's will operate on
 pub const AFVPORT: u16 = 4040;
+/// How many times an ethernet bus can timeout before it closes
+pub const TIMEOUT_BUDGET: u8 = 10;
 
 /// The trait that an object must implement should it wish to listen
 /// to an ethernet bus
@@ -32,6 +35,8 @@ pub trait EthernetListener<M>: Send + Sync {
 /// The general enum that will be used for communication between the gcs and the afv
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum NetworkMessage {
+    Heart,
+    Beat,
     Empty,
     String(String),
 }
@@ -136,23 +141,31 @@ impl EthernetBus<NetworkMessage> {
     /// With receive bytes and decode them into NetworkMessages
     /// Then will notify all bus participants
     async fn listen(self: Arc<Self>) {
-        println!(
-            "Tcp streaming on {}",
-            self.read_socket
-                .lock()
-                .await
-                .local_addr()
-                .expect("No addr for socket")
-        );
+        {
+            let reader = self.read_socket.lock().await;
+            println!(
+                "Tcp streaming on {} to {}",
+                reader.local_addr().expect("Could not get local addr"),
+                reader.peer_addr().expect("Could not get peer addr")
+            );
+        }
         let sleep_time = Duration::from_secs(5);
         let mut data = Vec::with_capacity(size_of::<NetworkMessage>());
+        let mut timeout_budget = TIMEOUT_BUDGET;
 
-        while Arc::strong_count(&self) > 1 {
+        while Arc::strong_count(&self) > 1 && timeout_budget > 0 {
             let preread_length = data.len();
             tokio::select! {
-                _ = sleep(sleep_time) => {println!("Timeout");continue;}
+                _ = sleep(sleep_time) => {
+                    println!("Timeout");
+                    self.send(NetworkMessage::Heart).await;
+                    timeout_budget -= 1;
+                    continue;
+                }
                 _ = self.process_msg(&mut data) => {}
             }
+
+            timeout_budget = TIMEOUT_BUDGET;
             let postread_length = data.len();
             if preread_length == postread_length {
                 break;
@@ -164,6 +177,14 @@ impl EthernetBus<NetworkMessage> {
                     continue;
                 }
             };
+
+            if let NetworkMessage::Heart = msg {
+                println!("Heart recived, beating");
+                self.send(NetworkMessage::Beat).await;
+            }
+            if let NetworkMessage::Beat = msg {
+                continue;
+            }
 
             for listener in self.listeners.read().await.iter() {
                 tokio::spawn(listener.clone().notify(msg.clone()));

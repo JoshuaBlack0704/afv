@@ -107,5 +107,7 @@ impl eframe::App for Terminal{
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
         self.side_panel(ctx);
         self.central_panel(ctx);
+        ctx.request_repaint();
     }
+    
 }
