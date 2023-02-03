@@ -16,7 +16,7 @@ use tokio::{
 /// The port that gcs's will use to communicate on their network
 pub const GCSPORT: u32 = 60000;
 /// The port that the ethernet transeivers for the afv's will operate on
-pub const AFVPORT: u32 = 4040;
+pub const AFVPORT: u16 = 4040;
 
 /// The trait that an object must implement should it wish to listen
 /// to an ethernet bus
