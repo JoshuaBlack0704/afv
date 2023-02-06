@@ -34,7 +34,7 @@ pub trait AfvComService<M>: Send + Sync {
     /// Upon receiving a complete msg over the network
     /// an ethernet bus will call this function in a new
     /// async task to let the implementor do what it wants
-    async fn notify(self: Arc<Self>, msg: M);
+    async fn notify(self: Arc<Self>, com: Arc<ComEngine<M>>, msg: M);
 }
 
 /// The state of a com engine
@@ -215,7 +215,7 @@ impl ComEngine<AfvMessage> {
             }
 
             for listener in self.listeners.read().await.iter() {
-                tokio::spawn(listener.clone().notify(msg.clone()));
+                tokio::spawn(listener.clone().notify(self.clone(), msg.clone()));
             }
 
             data.clear();
@@ -300,7 +300,7 @@ pub struct NetworkLogger {}
 
 #[async_trait]
 impl AfvComService<AfvMessage> for NetworkLogger {
-    async fn notify(self: Arc<Self>, msg: AfvMessage) {
+    async fn notify(self: Arc<Self>, _com: Arc<ComEngine<AfvMessage>>, msg: AfvMessage) {
         println!("Network traffic: {:?}", msg);
     }
 }
