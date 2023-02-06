@@ -1,24 +1,28 @@
 use std::{
-    net::{IpAddr, Ipv4Addr},
+    net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::Arc,
 };
 
+use async_trait::async_trait;
 use eframe::egui::{self, Ui};
 use tokio::{
+    net::TcpStream,
     runtime::Runtime,
-    sync::{RwLock, Semaphore},
+    sync::{Mutex, RwLock, Semaphore},
 };
 
-use crate::{
-    gui::GuiElement,
-    network::{EthernetBus, NetworkLogger, NetworkMessage, AFVPORT},
-};
+use crate::{gui::GuiElement, network::AFVPORT};
 
 #[derive(Clone, Copy)]
 pub enum ScannerState {
     Available,
     Dispatched,
     Complete,
+}
+
+#[async_trait]
+pub trait ScannerAddrHandler: Send + Sync {
+    async fn handle(&self, stream: TcpStream);
 }
 
 pub struct Scanner {
@@ -29,12 +33,14 @@ pub struct Scanner {
     state: RwLock<ScannerState>,
     open: RwLock<bool>,
     target_count: RwLock<usize>,
-    connects: RwLock<Vec<Arc<EthernetBus<NetworkMessage>>>>,
+    connects: RwLock<Vec<SocketAddr>>,
     parallel_attempts: RwLock<u32>,
+    semaphore: Mutex<Option<Arc<Semaphore>>>,
+    handler: RwLock<Option<Arc<dyn ScannerAddrHandler>>>,
 }
 
 impl Scanner {
-    pub fn new(rt: Option<Arc<Runtime>>) -> Arc<Scanner> {
+    pub fn new(rt: Option<Arc<Runtime>>) -> Arc<Self> {
         let rt = match rt {
             Some(rt) => rt,
             None => Arc::new(
@@ -64,17 +70,40 @@ impl Scanner {
             rt,
             open: RwLock::new(false),
             target_count: RwLock::new(0),
+            parallel_attempts: RwLock::new(100),
+            semaphore: Mutex::new(None),
+            handler: RwLock::new(None),
             connects: RwLock::new(vec![]),
-            parallel_attempts: RwLock::new(0),
         })
     }
-    pub fn new_with_config(
+    pub async fn set_handler(&self, handler: Arc<dyn ScannerAddrHandler>) {
+        *self.handler.write().await = Some(handler);
+    }
+    pub fn set_handler_blocking(&self, handler: Arc<dyn ScannerAddrHandler>) {
+        self.rt.block_on(self.set_handler(handler));
+    }
+
+    pub async fn cancel_scan(&self) {
+        let mut semaphore = self.semaphore.blocking_lock();
+        let mut closed = false;
+        if let Some(s) = &mut (*semaphore) {
+            s.close();
+            closed = true;
+        }
+        if closed {
+            *semaphore = None;
+        }
+    }
+    pub fn cancel_scan_blocking(&self) {
+        self.rt.block_on(self.cancel_scan());
+    }
+    pub fn new_with_config<F: Fn(SocketAddr) + Send + Sync + 'static>(
         rt: Option<Arc<Runtime>>,
         gateway: Ipv4Addr,
         subnet: Ipv4Addr,
         port_range: (u16, u16),
         parallel_attempts: u32,
-    ) -> Arc<Scanner> {
+    ) -> Arc<Self> {
         let scanner = Self::new(rt);
         *scanner.gateway.blocking_write() = gateway;
         *scanner.subnet.blocking_write() = subnet;
@@ -202,6 +231,19 @@ impl Scanner {
             ui.label(port_range);
             ui.label(targets_remaining);
             ui.label(successful_connects);
+            let mut semaphore = self.semaphore.blocking_lock();
+            let mut closed = false;
+            if let Some(s) = &mut (*semaphore) {
+                if ui.button("Cancel scan").clicked() {
+                    s.close();
+                    closed = true;
+                }
+            } else {
+                ui.label("Canceling scan...");
+            }
+            if closed {
+                *semaphore = None;
+            }
         });
     }
     fn completed_ui(self: &Arc<Self>, ui: &mut Ui) {
@@ -218,6 +260,11 @@ impl Scanner {
                 *self.target_count.blocking_write() = 0;
                 self.connects.blocking_write().clear();
             }
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                for con in self.connects.blocking_read().iter() {
+                    ui.label(format!("{}", con));
+                }
+            });
         });
     }
     async fn dispatch(self: Arc<Self>) {
@@ -273,8 +320,14 @@ impl Scanner {
 
         drop(tx);
 
-        while let Ok(bus) = rx.recv_async().await {
-            self.connects.write().await.push(bus);
+        *self.semaphore.lock().await = Some(semaphore);
+        while let Ok(stream) = rx.recv_async().await {
+            if let Ok(a) = stream.peer_addr() {
+                self.connects.write().await.push(a);
+            }
+            if let Some(h) = &(*self.handler.read().await) {
+                h.handle(stream).await;
+            }
         }
 
         *self.target_count.write().await = target_count;
@@ -283,22 +336,20 @@ impl Scanner {
     }
 
     async fn attempt_connect(
-        tx: flume::Sender<Arc<EthernetBus<NetworkMessage>>>,
+        tx: flume::Sender<TcpStream>,
         ip: Ipv4Addr,
         port: u16,
-        scanner: Arc<Scanner>,
+        scanner: Arc<Self>,
         semaphore: Arc<Semaphore>,
     ) {
         let aquire = semaphore.acquire().await;
         if let Err(_) = aquire {
+            *scanner.target_count.write().await -= 1;
             return;
         }
         let addr = (ip, port);
-        if let Ok(bus) = EthernetBus::new(&addr).await {
-            NetworkLogger::new(&bus).await;
-            if let Err(_) = tx.send_async(bus).await {
-                return;
-            }
+        if let Ok(s) = TcpStream::connect(addr).await {
+            let _ = tx.send_async(s).await;
         }
         *scanner.target_count.write().await -= 1;
     }
@@ -313,7 +364,7 @@ impl GuiElement for Arc<Scanner> {
         format!("Ip Scanner")
     }
 
-    fn render(&self, ui: &mut Ui) {
+    fn render(&self, _ctx: &egui::Context, ui: &mut Ui) {
         self.ui(ui);
     }
 }

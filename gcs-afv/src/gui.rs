@@ -5,7 +5,7 @@ use tokio::sync::{RwLockWriteGuard, RwLock};
 pub trait GuiElement{
     fn open(&self) -> RwLockWriteGuard<bool>;
     fn name(&self) -> String;
-    fn render(&self, ui: &mut Ui);
+    fn render(&self, ctx: &egui::Context, ui: &mut Ui);
 }
 
 pub trait GuiArgs{
@@ -34,7 +34,7 @@ impl GuiElement for Tutorial{
         format!("Tutorial")
     }
 
-    fn render(&self, ui: &mut Ui) {
+    fn render(&self, _ctx: &egui::Context, ui: &mut Ui) {
         ui.label("Test");
     }
 }
@@ -99,7 +99,7 @@ impl Terminal{
         let display_elements = |ui: &mut Ui|{
             for e in self.elements.iter(){
                 if *e.open(){
-                    e.render(ui);
+                    e.render(ctx, ui);
                     break;
                 }
             }

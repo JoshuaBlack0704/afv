@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use gcs_afv::{gui::{TerminalBuilder, GuiArgs}, scanner::Scanner, network::{EthernetBus, NetworkMessage, GCSPORT}};
-use tokio::{net::ToSocketAddrs, time::sleep};
+use gcs_afv::{gui::{TerminalBuilder, GuiArgs}, scanner::Scanner, network::{ComEngine, AfvMessage, GCSPORT}};
+use tokio::time::sleep;
 
 pub struct Args{}
 impl GuiArgs for Args{}
@@ -22,10 +22,10 @@ async fn pulse(){
             std::net::IpAddr::V4(i) => i,
             std::net::IpAddr::V6(i) => i.to_ipv4().unwrap(),
         };
-        let ethernet = EthernetBus::server((ip, GCSPORT)).await.expect("Could not run server");
+        let ethernet = ComEngine::afv_com_listen((ip, GCSPORT)).await.expect("Could not run server");
         for i in 0..2{
-            let msg = NetworkMessage::String(format!("Hello from server msg {}", i));
-            ethernet.send(msg).await;
+            let msg = AfvMessage::String(format!("Hello from server msg {}", i));
+            let _ = ethernet.send(msg).await;
             sleep(sleep_time).await;
         }
     }
