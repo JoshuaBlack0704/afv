@@ -12,7 +12,7 @@ use crate::{
     afv::Afv,
     gui::GuiElement,
     network::{ComEngine, NetworkLogger, AFVPORT},
-    scanner::{Scanner, ScannerAddrHandler},
+    scanner::{Scanner, ScannerStreamHandler},
 };
 
 pub struct AfvController {
@@ -84,7 +84,7 @@ impl AfvController {
 }
 
 #[async_trait]
-impl ScannerAddrHandler for AfvController {
+impl ScannerStreamHandler for AfvController {
     async fn handle(&self, stream: TcpStream) {
         let com = ComEngine::afv_com_stream(stream);
         println!("Establishing connection with afv at {}", com.peer_addr());

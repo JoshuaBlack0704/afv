@@ -1067,6 +1067,7 @@ dependencies = [
  "bincode",
  "eframe",
  "flume",
+ "futures",
  "glam",
  "image",
  "local-ip-address",

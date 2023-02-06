@@ -21,7 +21,7 @@ pub enum ScannerState {
 }
 
 #[async_trait]
-pub trait ScannerAddrHandler: Send + Sync {
+pub trait ScannerStreamHandler: Send + Sync {
     async fn handle(&self, stream: TcpStream);
 }
 
@@ -36,7 +36,7 @@ pub struct Scanner {
     connects: RwLock<Vec<SocketAddr>>,
     parallel_attempts: RwLock<u32>,
     semaphore: Mutex<Option<Arc<Semaphore>>>,
-    handler: RwLock<Option<Arc<dyn ScannerAddrHandler>>>,
+    handler: RwLock<Option<Arc<dyn ScannerStreamHandler>>>,
 }
 
 impl Scanner {
@@ -76,10 +76,10 @@ impl Scanner {
             connects: RwLock::new(vec![]),
         })
     }
-    pub async fn set_handler(&self, handler: Arc<dyn ScannerAddrHandler>) {
+    pub async fn set_handler(&self, handler: Arc<dyn ScannerStreamHandler>) {
         *self.handler.write().await = Some(handler);
     }
-    pub fn set_handler_blocking(&self, handler: Arc<dyn ScannerAddrHandler>) {
+    pub fn set_handler_blocking(&self, handler: Arc<dyn ScannerStreamHandler>) {
         self.rt.block_on(self.set_handler(handler));
     }
 
@@ -97,7 +97,7 @@ impl Scanner {
     pub fn cancel_scan_blocking(&self) {
         self.rt.block_on(self.cancel_scan());
     }
-    pub fn new_with_config<F: Fn(SocketAddr) + Send + Sync + 'static>(
+    pub fn new_with_config(
         rt: Option<Arc<Runtime>>,
         gateway: Ipv4Addr,
         subnet: Ipv4Addr,
@@ -267,7 +267,7 @@ impl Scanner {
             });
         });
     }
-    async fn dispatch(self: Arc<Self>) {
+    pub async fn dispatch(self: Arc<Self>) {
         *self.state.write().await = ScannerState::Dispatched;
         let gateway = self.gateway.read().await.octets();
         let subnet = self.subnet.read().await.octets();
