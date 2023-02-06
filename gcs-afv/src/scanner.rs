@@ -97,7 +97,7 @@ impl Scanner {
     pub fn cancel_scan_blocking(&self) {
         self.rt.block_on(self.cancel_scan());
     }
-    pub fn new_with_config(
+    pub fn new_with_config_blocking(
         rt: Option<Arc<Runtime>>,
         gateway: Ipv4Addr,
         subnet: Ipv4Addr,
@@ -109,6 +109,20 @@ impl Scanner {
         *scanner.subnet.blocking_write() = subnet;
         *scanner.port_range.blocking_write() = port_range;
         *scanner.parallel_attempts.blocking_write() = parallel_attempts;
+        scanner
+    }
+    pub async fn new_with_config(
+        rt: Option<Arc<Runtime>>,
+        gateway: Ipv4Addr,
+        subnet: Ipv4Addr,
+        port_range: (u16, u16),
+        parallel_attempts: u32,
+    ) -> Arc<Self> {
+        let scanner = Self::new(rt);
+        *scanner.gateway.write().await = gateway;
+        *scanner.subnet.write().await = subnet;
+        *scanner.port_range.write().await = port_range;
+        *scanner.parallel_attempts.write().await = parallel_attempts;
         scanner
     }
     pub fn ui(self: &Arc<Self>, ui: &mut Ui) {
@@ -267,6 +281,8 @@ impl Scanner {
             });
         });
     }
+
+    /// Handlers are called in place! Be careful about mutexing during handle op
     pub async fn dispatch(self: Arc<Self>) {
         *self.state.write().await = ScannerState::Dispatched;
         let gateway = self.gateway.read().await.octets();
