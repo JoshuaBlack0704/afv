@@ -89,7 +89,7 @@ impl ScannerAddrHandler for AfvController {
         let com = ComEngine::afv_com_stream(stream);
         println!("Establishing connection with afv at {}", com.peer_addr());
         NetworkLogger::afv_com_monitor(&com).await;
-        self.afv_links.write().await.push(Afv::new(com));
+        self.afv_links.write().await.push(Afv::link(com));
     }
 }
 

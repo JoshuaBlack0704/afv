@@ -4,6 +4,8 @@ use tokio::net::ToSocketAddrs;
 
 use crate::network::{ComEngine, AfvMessage};
 
+pub mod flir;
+
 #[allow(unused)]
 pub struct Afv{
     com: Arc<ComEngine<AfvMessage>>,
@@ -12,6 +14,13 @@ pub struct Afv{
 
 impl Afv{
     pub fn new(com: Arc<ComEngine<AfvMessage>>) -> Arc<Afv> {
+        Arc::new(
+            Self{
+                com,
+            }
+        )
+    }
+    pub fn link(com: Arc<ComEngine<AfvMessage>>) -> Arc<Afv>{
         Arc::new(
             Self{
                 com,
