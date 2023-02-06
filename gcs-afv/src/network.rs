@@ -15,6 +15,8 @@ use tokio::{
     time::{sleep, Duration},
 };
 
+use crate::afv::flir::FlirMsg;
+
 /// The port that gcs's will use to communicate on their network
 pub const GCSPORT: u16 = 60000;
 /// The port that the ethernet transeivers for the afv's will operate on
@@ -50,6 +52,7 @@ pub enum AfvMessage {
     Beat,
     Closed,
     String(String),
+    FlirMsg(FlirMsg)
 }
 
 /// What went wrong while creating an ethernet bus
