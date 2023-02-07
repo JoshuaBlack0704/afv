@@ -166,7 +166,7 @@ impl ComEngine<AfvMessage> {
             let preread_length = data.len();
             tokio::select! {
                 _ = sleep(TIMEOUT_TIME) => {
-                    println!("Timeout issued");
+                    // println!("Timeout issued");
                     if let Err(e) = self.send(AfvMessage::Heart).await{
                         *self.state.write().await = ComState::Error(Arc::new(e));
                         println!("Send error encounterd");
@@ -184,7 +184,6 @@ impl ComEngine<AfvMessage> {
                 }
             }
 
-            timeout_budget = TIMEOUT_BUDGET;
             let postread_length = data.len();
             if preread_length == postread_length {
                 println!("EOF recieved");
@@ -197,9 +196,10 @@ impl ComEngine<AfvMessage> {
                     continue;
                 }
             };
+            
+            timeout_budget = TIMEOUT_BUDGET;
 
             if let AfvMessage::Heart = msg {
-                println!("Heart recived, beating");
                 if let Err(e) = self.send(AfvMessage::Beat).await {
                     *self.state.write().await = ComState::Error(Arc::new(e));
                     println!("Send error encounterd");
@@ -209,7 +209,6 @@ impl ComEngine<AfvMessage> {
                 continue;
             }
             if let AfvMessage::Beat = msg {
-                println!("Beat recieved");
                 data.clear();
                 continue;
             }
@@ -257,7 +256,6 @@ impl<M> ComEngine<M> {
         let mut read = self.read_socket.lock().await;
         match read.read_u8().await {
             Ok(byte) => {
-                println!("Read");
                 data.push(byte);
                 return Ok(());
             }
@@ -301,7 +299,19 @@ pub struct NetworkLogger {}
 #[async_trait]
 impl AfvComService<AfvMessage> for NetworkLogger {
     async fn notify(self: Arc<Self>, _com: Arc<ComEngine<AfvMessage>>, msg: AfvMessage) {
-        println!("Network traffic: {:?}", msg);
+        match msg{
+            AfvMessage::Heart => println!("Network traffic: {:?}", msg),
+            AfvMessage::Beat => println!("Network traffic: {:?}", msg),
+            AfvMessage::Closed => println!("Network traffic: {:?}", msg),
+            AfvMessage::String(_) => println!("Network traffic: {:?}", msg),
+            AfvMessage::FlirMsg(m) => {
+                match m{
+                    FlirMsg::OpenStream => println!("Network traffic: {:?}", m),
+                    FlirMsg::Nal(_) => println!("Network traffic: Nal Packet"),
+                    FlirMsg::CloseStream => println!("Network traffic: {:?}", m),
+                }
+            },
+        }
     }
 }
 

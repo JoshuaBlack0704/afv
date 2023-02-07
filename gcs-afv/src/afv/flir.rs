@@ -25,6 +25,7 @@ use crate::{
 };
 
 pub const RTSP_IDLE_TIME: Duration = Duration::from_secs(1);
+pub const LINK_IDLE_TIME: Duration = Duration::from_secs(10);
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum FlirMsg {
@@ -43,10 +44,10 @@ pub trait IrSource: Send + Sync {
 }
 
 /// The driver for the Flir A50
-pub struct A50<S: IrSource> {
+pub struct A50 {
     rt: Arc<Runtime>,
     open: RwLock<bool>,
-    source: S,
+    source: Arc<dyn IrSource>,
     image_data: RwLock<DynamicImage>,
     gui_image: RwLock<Option<TextureHandle>>,
     network_stream: RwLock<bool>,
@@ -68,8 +69,8 @@ pub struct A50Link {
 
 
 
-impl<S: IrSource + 'static> A50<S> {
-    pub fn new(rt: Option<Arc<Runtime>>, source: S) -> Arc<Self> {
+impl A50{
+    pub fn new(rt: Option<Arc<Runtime>>, source: Arc<dyn IrSource>) -> Arc<Self> {
         let rt = match rt {
             Some(r) => r,
             None => Arc::new(
@@ -106,6 +107,7 @@ impl<S: IrSource + 'static> A50<S> {
         }
     }
     pub async fn periodic_refresh(self: Arc<Self>, interval: Option<Duration>) {
+        println!("Refresh");
         while Arc::strong_count(&self) > 1 {
             let image = self.source.image().await;
             *self.image_data.write().await = image;
@@ -120,7 +122,7 @@ impl<S: IrSource + 'static> A50<S> {
     }
 }
 
-impl<S: IrSource + 'static> GuiElement for A50<S> {
+impl GuiElement for A50{
     fn open(&self) -> tokio::sync::RwLockWriteGuard<bool> {
         self.open.blocking_write()
     }
@@ -129,7 +131,7 @@ impl<S: IrSource + 'static> GuiElement for A50<S> {
         "A50".into()
     }
 
-    fn render(&self, _ctx: &egui::Context, ui: &mut egui::Ui) {
+    fn render(&self, ui: &mut egui::Ui) {
         let mut gui_lock = self.gui_image.blocking_write();
         let gui_image = gui_lock.get_or_insert(self.load_gui_image(ui));
         ui.image(gui_image.id(), ui.available_size());
@@ -137,7 +139,7 @@ impl<S: IrSource + 'static> GuiElement for A50<S> {
 }
 
 #[async_trait]
-impl<S:IrSource + 'static> AfvComService<AfvMessage> for A50<S>{
+impl AfvComService<AfvMessage> for A50{
     async fn notify(self: Arc<Self>, com: Arc<ComEngine<AfvMessage>>, msg: AfvMessage){
         if let AfvMessage::FlirMsg(FlirMsg::OpenStream) = msg{
             {
@@ -152,20 +154,23 @@ impl<S:IrSource + 'static> AfvComService<AfvMessage> for A50<S>{
 
             let stream = self.source.stream();
             tokio::spawn(async move {
+            println!("Attempting network rtsp stream");
                 while let Ok(p) = stream.recv_async().await{
                     if !*self.network_stream.read().await{
-                        return;
+                        break;
                     }
 
                     let packet = FlirMsg::Nal(p);
                     let _ = com.send(AfvMessage::FlirMsg(packet)).await;
                 }
                 *self.network_stream.write().await = false;
+            println!("Finished network rtsp stream");
             });
             return;
         }
         
         if let AfvMessage::FlirMsg(FlirMsg::CloseStream) = msg{
+            println!("Closing rtsp network stream");
             *self.network_stream.write().await = false;
         }
         
@@ -219,10 +224,9 @@ impl IrSource for Arc<RtspSession> {
         tokio::spawn(async move {
             let peer_addr = match *a50.peer_addr.read().await {
                 Some(a) => a,
-                None => return,
+                None => {println!("No peer addr available for rtsp stream");return},
             };
 
-            println!("Recieved rtsp stream request");
             // We must attempt to establish an rtsp stream
             let url = match Url::parse(&format!("rtsp://:@{}:554/avc", peer_addr.ip())) {
                 Ok(u) => u,
@@ -345,13 +349,23 @@ impl ScannerStreamHandler for Arc<RtspSession> {
 }
 
 impl A50Link{
-    pub fn new(com: Arc<ComEngine<AfvMessage>>){
+    pub async fn new(com: Arc<ComEngine<AfvMessage>>) -> Arc<A50Link> {
+        let link = Arc::new(Self{
+            com: com.clone(),
+            network_stream: RwLock::new(None),
+        });
+        
+        com.add_listener(link.clone()).await;
+        link
+    }
+    pub fn new_blocking(com: Arc<ComEngine<AfvMessage>>) -> Arc<A50Link> {
         let link = Arc::new(Self{
             com: com.clone(),
             network_stream: RwLock::new(None),
         });
         
         com.add_listener_blocking(link.clone());
+        link
     }
 }
 
@@ -372,12 +386,42 @@ impl AfvComService<AfvMessage> for A50Link{
 }
 
 #[async_trait]
-impl IrSource for A50Link{
+impl IrSource for Arc<A50Link>{
     
     fn stream(&self) -> flume::Receiver<Vec<u8>> {
         let (s_tx, s_rx) = flume::unbounded();
         let (n_tx, n_rx) = flume::unbounded();
+        let link = self.clone();
         tokio::spawn(async move {
+            {
+                *link.network_stream.write().await = Some(n_tx);
+            }
+            let _ = link.com.send(AfvMessage::FlirMsg(FlirMsg::OpenStream)).await;
+            loop {
+                let p;
+                tokio::select!{
+                    _ = sleep(LINK_IDLE_TIME) => {
+                        println!("A50 link stream timeout");
+                        break;
+                    }
+                    val = n_rx.recv_async() => {
+                        p = val;
+                    }
+                }
+
+                match p{
+                    Ok(p) => {
+                       if let Err(_) = s_tx.send_async(p).await{
+                            break;
+                        } 
+                    },
+                    Err(_) => break,
+                }
+                
+            }
+            println!("A50 link close");
+            let _ = link.com.send(AfvMessage::FlirMsg(FlirMsg::CloseStream)).await;
+            *link.network_stream.write().await = None;
         });
         s_rx
     }
@@ -403,7 +447,7 @@ impl IrSource for A50Link{
             };
 
             let mut nal = Vec::with_capacity(packet.len());
-            println!("Recieved nal packet");
+            // println!("Recieved nal packet");
 
             to_bitstream_with_001_be::<u32>(&packet, &mut nal);
 

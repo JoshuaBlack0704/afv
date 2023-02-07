@@ -380,7 +380,7 @@ impl GuiElement for Arc<Scanner> {
         format!("Ip Scanner")
     }
 
-    fn render(&self, _ctx: &egui::Context, ui: &mut Ui) {
+    fn render(&self, ui: &mut Ui) {
         self.ui(ui);
     }
 }
