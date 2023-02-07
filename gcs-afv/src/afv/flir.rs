@@ -43,6 +43,158 @@ pub trait IrSource: Send + Sync {
     async fn image(&self) -> DynamicImage;
 }
 
+#[async_trait]
+/// This trait embodies what it takes to drive the underlying device
+pub trait Controller: Send + Sync{
+    /// Will start a nal packet stream
+    fn stream(self: Arc<Self>) -> flume::Receiver<Vec<u8>>;
+}
+
+/// Directly controls the a50
+pub struct Actuator{
+    com: Arc<ComEngine<AfvMessage>>,    
+}
+
+/// Sends commands and recieved data from an actuator through a comengine
+pub struct Link{
+    com: Arc<ComEngine<AfvMessage>>,
+}
+
+/// High level system for interacting with a flir
+pub struct Flir{
+    open: RwLock<bool>,
+    live: RwLock<bool>,
+    controller: Arc<dyn Controller>,
+    image_data: RwLock<DynamicImage>,
+    gui_image: RwLock<Option<TextureHandle>>,
+}
+
+impl Flir{
+    pub async fn actuated(com: Arc<ComEngine<AfvMessage>>) -> Arc<Flir> {
+        let controller = Actuator::new(com).await;
+        Arc::new(Self{
+            open: RwLock::new(false),
+            controller,
+            image_data: RwLock::new(DynamicImage::default()),
+            gui_image: RwLock::new(None),
+            live: RwLock::new(false),
+        })
+    }
+    pub fn actuated_blocking(rt: Arc<Runtime>, com: Arc<ComEngine<AfvMessage>>) -> Arc<Flir> {
+        rt.block_on(Self::actuated(com))
+    }
+    pub async fn linked(com: Arc<ComEngine<AfvMessage>>) -> Arc<Flir> {
+        let controller = Link::new(com).await;
+        Arc::new(Self{
+            open: RwLock::new(false),
+            controller,
+            image_data: RwLock::new(DynamicImage::default()),
+            gui_image: RwLock::new(None),
+            live: RwLock::new(false),
+        })
+        
+    }
+    pub fn linked_blocking(rt: Arc<Runtime>, com: Arc<ComEngine<AfvMessage>>) -> Arc<Flir> {
+        rt.block_on(Self::linked(com))
+    }
+    pub async fn live_feed(self: Arc<Self>){
+        *self.live.write().await = true;
+        tokio::spawn(self.feed());
+    }
+    pub async fn stop_feed(&self){
+        *self.live.write().await = false;
+    }
+    pub async fn feed(self: Arc<Self>){
+        let stream = self.controller.clone().stream();
+        let mut decoder = match Decoder::new(){
+            Ok(d) => d,
+            Err(_) => return,
+        };
+
+        loop {
+            let p = match stream.recv_async().await{
+                Ok(p) => p,
+                Err(_) => break,
+            };
+
+            let mut nal = Vec::with_capacity(p.len());
+            to_bitstream_with_001_be::<u32>(&p, &mut nal);
+            
+            for p in nal_units(&nal){
+                if let Ok(Some(yuv)) = decoder.decode(&p){
+                    let image_size = yuv.dimension_rgb();
+                    let mut rgb_data = vec![0; image_size.0*image_size.1];
+                    yuv.write_rgb8(&mut rgb_data);
+                    let image_data = match ImageBuffer::from_raw(
+                        image_size.0 as u32,
+                        image_size.1 as u32,
+                        rgb_data,
+                    ) {
+                        Some(i) => i,
+                        None => continue,
+                    };
+                    *self.image_data.write().await = DynamicImage::ImageRgb8(image_data);
+                }
+            }
+
+            if !*self.live.read().await{break}
+        }
+    }
+}
+
+
+/// Actuator Impl
+
+impl Actuator{
+    pub async fn new(com: Arc<ComEngine<AfvMessage>>) -> Arc<Actuator> {
+        let controller = Arc::new(Self{
+            com: com.clone(),
+        });
+        com.add_listener(controller.clone()).await;
+        controller
+    }
+}
+
+impl Controller for Actuator{
+    fn stream(self:Arc<Self>) -> flume::Receiver<Vec<u8> >  {
+        todo!()
+    }
+}
+
+#[async_trait]
+impl AfvComService<AfvMessage> for Actuator{
+    async fn notify(self: Arc<Self>, com: Arc<ComEngine<AfvMessage>>, msg: AfvMessage){
+        
+    }
+}
+
+
+/// Link Impl
+
+impl Link{
+    pub async fn new(com: Arc<ComEngine<AfvMessage>>) -> Arc<Link> {
+        let controller = Arc::new(Self{
+            com: com.clone(),
+        });
+        com.add_listener(controller.clone()).await;
+        controller
+    }
+}
+
+impl Controller for Link{
+    fn stream(self:Arc<Self>) -> flume::Receiver<Vec<u8> >  {
+        todo!()
+    }
+}
+
+#[async_trait]
+impl AfvComService<AfvMessage> for Link{
+    async fn notify(self: Arc<Self>, com: Arc<ComEngine<AfvMessage>>, msg: AfvMessage){
+        
+    }
+}
+
+
 /// The driver for the Flir A50
 pub struct A50 {
     rt: Arc<Runtime>,
