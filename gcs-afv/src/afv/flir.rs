@@ -53,12 +53,14 @@ pub trait Controller: Send + Sync{
 /// Directly controls the a50
 pub struct Actuator{
     peer_addr: RwLock<Option<SocketAddr>>,
+    open_stream: RwLock<bool>,
     com: Option<Arc<ComEngine<AfvMessage>>>,    
 }
 
 /// Sends commands and recieved data from an actuator through a comengine
 pub struct Link{
     com: Arc<ComEngine<AfvMessage>>,    
+    network_channel: RwLock<Option<flume::Sender<Vec<u8>>>>,
 }
 
 /// High level system for interacting with a flir
@@ -186,6 +188,7 @@ impl Actuator{
         let controller = Arc::new(Self{
             com: com.clone(),
             peer_addr: RwLock::new(None),
+            open_stream: RwLock::new(false),
         });
         
         let ip = match local_ip_address::local_ip().expect("Could not get local ip addr") {
@@ -296,6 +299,26 @@ impl Controller for Actuator{
 #[async_trait]
 impl AfvComService<AfvMessage> for Actuator{
     async fn notify(self: Arc<Self>, com: Arc<ComEngine<AfvMessage>>, msg: AfvMessage){
+        if let AfvMessage::FlirMsg(FlirMsg::OpenStream) = msg{
+            println!("Starting Flir network stream");
+            {
+                *self.open_stream.write().await = true;
+            }
+            let stream = self.clone().stream();
+            while *self.open_stream.read().await{
+               if let Ok(p) = stream.recv_async().await{
+                    let _ = com.send(AfvMessage::FlirMsg(FlirMsg::Nal(p))).await;
+                    continue;
+                } 
+                *self.open_stream.write().await = false;
+            }
+            println!("Stopping Flir network stream");
+            return;
+        }
+        if let AfvMessage::FlirMsg(FlirMsg::CloseStream) = msg{
+            *self.open_stream.write().await = false;
+            return;
+        }
         
     }
 }
@@ -307,6 +330,7 @@ impl Link{
     pub async fn new(com: Arc<ComEngine<AfvMessage>>) -> Arc<Link> {
         let controller = Arc::new(Self{
             com: com.clone(),
+            network_channel: RwLock::new(None),
         });
         com.add_listener(controller.clone()).await;
         controller
@@ -315,14 +339,51 @@ impl Link{
 
 impl Controller for Link{
     fn stream(self:Arc<Self>) -> flume::Receiver<Vec<u8> >  {
-        todo!()
+        let (n_tx, n_rx) = flume::unbounded();
+        let (s_tx, s_rx) = flume::unbounded();
+        let link = self.clone();
+        println!("Attempting remote flir network stream");
+        tokio::spawn(async move{
+            {
+                *self.network_channel.write().await = Some(n_tx);
+            }
+            loop{
+                let p;
+                tokio::select!{
+                    _ = sleep(LINK_IDLE_TIME) => {
+                        println!("Remote flir network stream timeout");
+                        break;
+                    }
+                    val = n_rx.recv_async() => {
+                        p = val;
+                    }
+                }
+
+                match p{
+                    Ok(p) => {
+                       if let Err(_) = s_tx.send_async(p).await{
+                            break;
+                        } 
+                    },
+                    Err(_) => break,
+                }
+            }
+            let _ = link.com.send(AfvMessage::FlirMsg(FlirMsg::CloseStream)).await;
+            *link.network_channel.write().await = None;
+            println!("Closed remote flir network stream");
+        });
+        s_rx
     }
 }
 
 #[async_trait]
 impl AfvComService<AfvMessage> for Link{
-    async fn notify(self: Arc<Self>, com: Arc<ComEngine<AfvMessage>>, msg: AfvMessage){
-        
+    async fn notify(self: Arc<Self>, _com: Arc<ComEngine<AfvMessage>>, msg: AfvMessage){
+        if let AfvMessage::FlirMsg(FlirMsg::Nal(p)) = msg{
+            if let Some(tx) = &(*self.network_channel.read().await){
+                let _ = tx.send_async(p).await;
+            }
+        }
     }
 }
 

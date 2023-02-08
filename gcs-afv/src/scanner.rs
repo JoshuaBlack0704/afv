@@ -85,7 +85,7 @@ impl Scanner {
     }
 
     pub async fn cancel_scan(&self) {
-        let mut semaphore = self.semaphore.blocking_lock();
+        let mut semaphore = self.semaphore.lock().await;
         let mut closed = false;
         if let Some(s) = &mut (*semaphore) {
             s.close();
