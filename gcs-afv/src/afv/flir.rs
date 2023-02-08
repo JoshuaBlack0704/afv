@@ -53,12 +53,12 @@ pub trait Controller: Send + Sync{
 /// Directly controls the a50
 pub struct Actuator{
     peer_addr: RwLock<Option<SocketAddr>>,
-    com: Arc<ComEngine<AfvMessage>>,    
+    com: Option<Arc<ComEngine<AfvMessage>>>,    
 }
 
 /// Sends commands and recieved data from an actuator through a comengine
 pub struct Link{
-    com: Arc<ComEngine<AfvMessage>>,
+    com: Arc<ComEngine<AfvMessage>>,    
 }
 
 /// High level system for interacting with a flir
@@ -71,17 +71,17 @@ pub struct Flir{
 }
 
 impl Flir{
-    pub async fn actuated(com: Arc<ComEngine<AfvMessage>>) -> Arc<Flir> {
+    pub async fn actuated(com: Option<Arc<ComEngine<AfvMessage>>>) -> Arc<Flir> {
         let controller = Actuator::new(com).await;
         Arc::new(Self{
             open: RwLock::new(false),
             controller,
-            image_data: RwLock::new(DynamicImage::default()),
+            image_data: RwLock::new(DynamicImage::new_rgb8(100,100)),
             gui_image: RwLock::new(None),
             live: RwLock::new(false),
         })
     }
-    pub fn actuated_blocking(rt: Arc<Runtime>, com: Arc<ComEngine<AfvMessage>>) -> Arc<Flir> {
+    pub fn actuated_blocking(rt: Arc<Runtime>, com: Option<Arc<ComEngine<AfvMessage>>>) -> Arc<Flir> {
         rt.block_on(Self::actuated(com))
     }
     pub async fn linked(com: Arc<ComEngine<AfvMessage>>) -> Arc<Flir> {
@@ -89,7 +89,7 @@ impl Flir{
         Arc::new(Self{
             open: RwLock::new(false),
             controller,
-            image_data: RwLock::new(DynamicImage::default()),
+            image_data: RwLock::new(DynamicImage::new_rgb8(100,100)),
             gui_image: RwLock::new(None),
             live: RwLock::new(false),
         })
@@ -135,11 +135,46 @@ impl Flir{
                         None => continue,
                     };
                     *self.image_data.write().await = DynamicImage::ImageRgb8(image_data);
+                    *self.gui_image.write().await = None;
                 }
             }
 
             if !*self.live.read().await{break}
         }
+    }
+
+    pub fn get_gui_image(&self, ui: &mut egui::Ui) -> TextureHandle{
+        let mut gui_image = self.gui_image.blocking_write();
+        if let Some(i) = &(*gui_image){
+            return i.clone();
+        }
+
+        let image = self.image_data.blocking_read();
+        let rgb = image.as_rgb8().unwrap();
+        let pixels = rgb.as_flat_samples();
+        let size = [image.width() as usize, image.height() as usize];
+        let color_image = egui::ColorImage::from_rgb(size, pixels.as_slice());
+        let handle = ui.ctx().load_texture("Flir Output", color_image, Default::default());
+
+        *gui_image = Some(handle.clone());
+        handle
+    }
+}
+
+impl GuiElement for Flir{
+    fn open(&self) -> tokio::sync::RwLockWriteGuard<bool> {
+        let open = self.open.blocking_write();
+        *self.live.blocking_write() = *open;
+        open
+    }
+
+    fn name(&self) -> String {
+        "Flir".into()
+    }
+
+    fn render(&self, ui: &mut egui::Ui) {
+        let gui_image = self.get_gui_image(ui);
+        ui.image(gui_image.id(), ui.available_size());
     }
 }
 
@@ -147,7 +182,7 @@ impl Flir{
 /// Actuator Impl
 
 impl Actuator{
-    pub async fn new(com: Arc<ComEngine<AfvMessage>>) -> Arc<Actuator> {
+    pub async fn new(com: Option<Arc<ComEngine<AfvMessage>>>) -> Arc<Actuator> {
         let controller = Arc::new(Self{
             com: com.clone(),
             peer_addr: RwLock::new(None),
@@ -157,11 +192,38 @@ impl Actuator{
             std::net::IpAddr::V4(i) => i,
             std::net::IpAddr::V6(i) => i.to_ipv4_mapped().expect("Could net get ipv4 addr"),
         };
-        println!("Looking for rtsp stream on network {}", ip);
+        println!("Looking for flir in network {}", ip);
         let subnet = Ipv4Addr::new(255, 255, 255, 0);
         let scanner = Scanner::new_with_config(ip.into(), subnet, (554, 554), 256).await;
-        com.add_listener(controller.clone()).await;
+        tokio::spawn(controller.clone().flir_repeat_connect(scanner));
+        if let Some(com) = com{
+            com.add_listener(controller.clone()).await;
+        }
         controller
+    }
+    async fn flir_repeat_connect(self: Arc<Self>, scanner: Arc<Scanner>){
+        scanner.set_handler(self.clone()).await;
+        while let None = *self.peer_addr.read().await{
+            let _ = scanner.request_dispatch().await;
+            println!("Attempting Flir connection");
+        }
+        println!("Connected to FLIR at {:?}", *self.peer_addr.read().await);
+    }
+}
+
+#[async_trait]
+impl ScannerStreamHandler for Actuator{
+    async fn handle(self: Arc<Self>, stream: TcpStream){
+        let flir = self.clone();
+        
+        tokio::spawn(async move{
+            match stream.peer_addr(){
+                Ok(p) => {
+                    *flir.peer_addr.write().await = Some(p);
+                },
+                Err(_) => {},
+            }
+        });
     }
 }
 
@@ -225,7 +287,7 @@ impl Controller for Actuator{
                     None => {}
                 };
             }
-            println!("Rtsp stream request closed");
+            println!("Rtsp stream closed");
         });
         rx
     }
@@ -403,7 +465,7 @@ impl AfvComService<AfvMessage> for A50{
 }
 
 impl RtspSession {
-    pub async fn new(rt: Option<Arc<Runtime>>) -> Arc<Self> {
+    pub async fn new() -> Arc<Self> {
         let ip = match local_ip_address::local_ip().expect("Could not get local ip addr") {
             std::net::IpAddr::V4(i) => i,
             std::net::IpAddr::V6(i) => i.to_ipv4_mapped().expect("Could net get ipv4 addr"),
@@ -419,17 +481,17 @@ impl RtspSession {
         rtsp
     }
     pub fn new_blocking(rt: Arc<Runtime>) -> Arc<RtspSession> {
-        rt.block_on(Self::new(Some(rt.clone())))
+        rt.block_on(Self::new())
     }
     pub async fn attempt_connection(self: Arc<Self>, scanner: Arc<Scanner>) {
-        scanner.set_handler(Arc::new(self.clone())).await;
+        scanner.set_handler(self.clone()).await;
         let mut connected = false;
         while !connected {
             match *self.peer_addr.read().await {
                 Some(_) => connected = true,
                 None => {
                     println!("Attempting connection to flir camera");
-                    tokio::spawn(scanner.clone().dispatch());
+                    let _ = scanner.request_dispatch().await;
                     sleep(RTSP_IDLE_TIME).await;
                 }
             }
@@ -556,8 +618,8 @@ impl IrSource for Arc<RtspSession> {
 }
 
 #[async_trait]
-impl ScannerStreamHandler for Arc<RtspSession> {
-    async fn handle(&self, stream: TcpStream) {
+impl ScannerStreamHandler for RtspSession {
+    async fn handle(self: Arc<Self>, stream: TcpStream) {
         // We must attempt to establish an rtsp stream
         let peer_addr = match stream.peer_addr() {
             Ok(a) => a,

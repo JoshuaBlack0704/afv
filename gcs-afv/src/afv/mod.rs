@@ -72,7 +72,7 @@ impl Afv{
             ),
         };
         let com = ComEngine::afv_com_listen(addr).await.expect("Dummy afv could not establish connection");
-        let rtsp = RtspSession::new(Some(rt.clone())).await;
+        let rtsp = RtspSession::new().await;
         let a50 = A50::new(Some(rt.clone()), Arc::new(rtsp.clone()));
         com.add_listener(a50.clone()).await;
         NetworkLogger::afv_com_monitor(&com).await;

@@ -102,7 +102,7 @@ impl AfvController {
 
 #[async_trait]
 impl ScannerStreamHandler for AfvController {
-    async fn handle(&self, stream: TcpStream) {
+    async fn handle(self: Arc<Self>, stream: TcpStream) {
         let com = ComEngine::afv_com_stream(stream);
         println!("Establishing connection with afv at {}", com.peer_addr());
         NetworkLogger::afv_com_monitor(&com).await;

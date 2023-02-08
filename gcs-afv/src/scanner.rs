@@ -22,7 +22,7 @@ pub enum ScannerState {
 
 #[async_trait]
 pub trait ScannerStreamHandler: Send + Sync {
-    async fn handle(&self, stream: TcpStream);
+    async fn handle(self: Arc<Self>, stream: TcpStream);
 }
 
 pub struct Scanner {
@@ -63,7 +63,7 @@ impl Scanner {
             semaphore: Mutex::new(None),
             handler: RwLock::new(None),
             connects: RwLock::new(vec![]),
-            dispatch_request: flume::unbounded(),
+            dispatch_request: flume::bounded(1),
         });
         tokio::spawn(scanner.clone().dispatch());
         scanner
@@ -71,8 +71,11 @@ impl Scanner {
     pub fn new_blocking(rt: Arc<Runtime>) -> Arc<Self> {
         rt.block_on(Self::new())
     }
-    pub fn request_dispatch(&self){
-        let _ = self.dispatch_request.0.send(true);
+    pub async fn request_dispatch(&self) -> Result<(), flume::SendError<bool>> {
+        self.dispatch_request.0.send_async(true).await
+    }
+    pub fn request_dispatch_blocking(&self) -> Result<(), flume::SendError<bool>> {
+        self.dispatch_request.0.send(true)
     }
     pub async fn set_handler(&self, handler: Arc<dyn ScannerStreamHandler>) {
         *self.handler.write().await = Some(handler);
@@ -206,7 +209,7 @@ impl Scanner {
                 *subnet = Ipv4Addr::new(255, 255, 255, 255);
             }
             if ui.button("Start").clicked() {
-                self.request_dispatch();
+                let _ = self.request_dispatch_blocking();
             };
         });
     }
@@ -275,9 +278,10 @@ impl Scanner {
     }
 
     /// Handlers are called in place! Be careful about mutexing during handle op
-    pub async fn dispatch(self: Arc<Self>) {
+    async fn dispatch(self: Arc<Self>) {
         loop{
             if let Err(_) = self.dispatch_request.1.recv_async().await{break}
+            println!("Scanner dispatch requested");
             *self.state.write().await = ScannerState::Dispatched;
             let gateway = self.gateway.read().await.octets();
             let subnet = self.subnet.read().await.octets();
@@ -336,13 +340,14 @@ impl Scanner {
                     self.connects.write().await.push(a);
                 }
                 if let Some(h) = &(*self.handler.read().await) {
-                    h.handle(stream).await;
+                    h.clone().handle(stream).await;
                 }
             }
 
             *self.target_count.write().await = target_count;
 
             *self.state.write().await = ScannerState::Complete;
+            println!("Scanner dispatch completed");
         }
     }
 
