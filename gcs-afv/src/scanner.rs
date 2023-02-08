@@ -26,7 +26,6 @@ pub trait ScannerStreamHandler: Send + Sync {
 }
 
 pub struct Scanner {
-    rt: Arc<Runtime>,
     gateway: RwLock<Ipv4Addr>,
     subnet: RwLock<Ipv4Addr>,
     port_range: RwLock<(u16, u16)>,
@@ -37,20 +36,11 @@ pub struct Scanner {
     parallel_attempts: RwLock<u32>,
     semaphore: Mutex<Option<Arc<Semaphore>>>,
     handler: RwLock<Option<Arc<dyn ScannerStreamHandler>>>,
+    dispatch_request: (flume::Sender<bool>, flume::Receiver<bool>),
 }
 
 impl Scanner {
-    pub fn new(rt: Option<Arc<Runtime>>) -> Arc<Self> {
-        let rt = match rt {
-            Some(rt) => rt,
-            None => Arc::new(
-                tokio::runtime::Builder::new_multi_thread()
-                    .enable_all()
-                    .build()
-                    .expect("Could not construct runtime for scanenr"),
-            ),
-        };
-
+    pub async fn new() -> Arc<Self> {
         let ip = match local_ip_address::local_ip() {
             Ok(ip) => {
                 let mut res = Ipv4Addr::new(192, 168, 1, 1);
@@ -62,25 +52,33 @@ impl Scanner {
             Err(_) => Ipv4Addr::new(192, 168, 1, 1),
         };
 
-        Arc::new(Self {
+        let scanner = Arc::new(Self {
             gateway: RwLock::new(ip),
             subnet: RwLock::new(Ipv4Addr::new(255, 255, 255, 0)),
             port_range: RwLock::new((AFVPORT, AFVPORT)),
             state: RwLock::new(ScannerState::Available),
-            rt,
             open: RwLock::new(false),
             target_count: RwLock::new(0),
             parallel_attempts: RwLock::new(100),
             semaphore: Mutex::new(None),
             handler: RwLock::new(None),
             connects: RwLock::new(vec![]),
-        })
+            dispatch_request: flume::unbounded(),
+        });
+        tokio::spawn(scanner.clone().dispatch());
+        scanner
+    }
+    pub fn new_blocking(rt: Arc<Runtime>) -> Arc<Self> {
+        rt.block_on(Self::new())
+    }
+    pub fn request_dispatch(&self){
+        let _ = self.dispatch_request.0.send(true);
     }
     pub async fn set_handler(&self, handler: Arc<dyn ScannerStreamHandler>) {
         *self.handler.write().await = Some(handler);
     }
-    pub fn set_handler_blocking(&self, handler: Arc<dyn ScannerStreamHandler>) {
-        self.rt.block_on(self.set_handler(handler));
+    pub fn set_handler_blocking(&self, rt: Arc<Runtime>, handler: Arc<dyn ScannerStreamHandler>) {
+        rt.block_on(self.set_handler(handler));
     }
 
     pub async fn cancel_scan(&self) {
@@ -94,31 +92,25 @@ impl Scanner {
             *semaphore = None;
         }
     }
-    pub fn cancel_scan_blocking(&self) {
-        self.rt.block_on(self.cancel_scan());
+    pub fn cancel_scan_blocking(&self, rt: Arc<Runtime>) {
+        rt.block_on(self.cancel_scan());
     }
     pub fn new_with_config_blocking(
-        rt: Option<Arc<Runtime>>,
+        rt: Arc<Runtime>,
         gateway: Ipv4Addr,
         subnet: Ipv4Addr,
         port_range: (u16, u16),
         parallel_attempts: u32,
     ) -> Arc<Self> {
-        let scanner = Self::new(rt);
-        *scanner.gateway.blocking_write() = gateway;
-        *scanner.subnet.blocking_write() = subnet;
-        *scanner.port_range.blocking_write() = port_range;
-        *scanner.parallel_attempts.blocking_write() = parallel_attempts;
-        scanner
+        rt.block_on(Self::new_with_config(gateway, subnet, port_range, parallel_attempts))
     }
     pub async fn new_with_config(
-        rt: Option<Arc<Runtime>>,
         gateway: Ipv4Addr,
         subnet: Ipv4Addr,
         port_range: (u16, u16),
         parallel_attempts: u32,
     ) -> Arc<Self> {
-        let scanner = Self::new(rt);
+        let scanner = Self::new().await;
         *scanner.gateway.write().await = gateway;
         *scanner.subnet.write().await = subnet;
         *scanner.port_range.write().await = port_range;
@@ -214,7 +206,7 @@ impl Scanner {
                 *subnet = Ipv4Addr::new(255, 255, 255, 255);
             }
             if ui.button("Start").clicked() {
-                self.rt.spawn(self.clone().dispatch());
+                self.request_dispatch();
             };
         });
     }
@@ -284,71 +276,74 @@ impl Scanner {
 
     /// Handlers are called in place! Be careful about mutexing during handle op
     pub async fn dispatch(self: Arc<Self>) {
-        *self.state.write().await = ScannerState::Dispatched;
-        let gateway = self.gateway.read().await.octets();
-        let subnet = self.subnet.read().await.octets();
-        let port_range = *self.port_range.read().await;
-        let port_count = (port_range.0..=port_range.1).count();
-        let concurrent_attempts = *self.parallel_attempts.read().await;
+        loop{
+            if let Err(_) = self.dispatch_request.1.recv_async().await{break}
+            *self.state.write().await = ScannerState::Dispatched;
+            let gateway = self.gateway.read().await.octets();
+            let subnet = self.subnet.read().await.octets();
+            let port_range = *self.port_range.read().await;
+            let port_count = (port_range.0..=port_range.1).count();
+            let concurrent_attempts = *self.parallel_attempts.read().await;
 
-        let mut octet_matches = [vec![], vec![], vec![], vec![]];
+            let mut octet_matches = [vec![], vec![], vec![], vec![]];
 
-        let mut targets = vec![];
+            let mut targets = vec![];
 
-        for o in 0..gateway.len() {
-            let g_octet = gateway[o];
-            let s_octet = subnet[o];
+            for o in 0..gateway.len() {
+                let g_octet = gateway[o];
+                let s_octet = subnet[o];
 
-            for ip in 0..=u8::MAX {
-                if ip & s_octet == g_octet & s_octet {
-                    octet_matches[o].push(ip);
-                }
-            }
-        }
-
-        for o0 in octet_matches[0].iter() {
-            for o1 in octet_matches[1].iter() {
-                for o2 in octet_matches[2].iter() {
-                    for o3 in octet_matches[3].iter() {
-                        targets.push(Ipv4Addr::new(*o0, *o1, *o2, *o3));
+                for ip in 0..=u8::MAX {
+                    if ip & s_octet == g_octet & s_octet {
+                        octet_matches[o].push(ip);
                     }
                 }
             }
-        }
 
-        let target_count = targets.len() * port_count;
-        *self.target_count.write().await = target_count;
-
-        let (tx, rx) = flume::unbounded();
-        let semaphore = Arc::new(Semaphore::new(concurrent_attempts as usize));
-
-        for t in targets.iter() {
-            for p in port_range.0..=port_range.1 {
-                tokio::spawn(Self::attempt_connect(
-                    tx.clone(),
-                    *t,
-                    p,
-                    self.clone(),
-                    semaphore.clone(),
-                ));
+            for o0 in octet_matches[0].iter() {
+                for o1 in octet_matches[1].iter() {
+                    for o2 in octet_matches[2].iter() {
+                        for o3 in octet_matches[3].iter() {
+                            targets.push(Ipv4Addr::new(*o0, *o1, *o2, *o3));
+                        }
+                    }
+                }
             }
-        }
 
-        drop(tx);
+            let target_count = targets.len() * port_count;
+            *self.target_count.write().await = target_count;
 
-        *self.semaphore.lock().await = Some(semaphore);
-        while let Ok(stream) = rx.recv_async().await {
-            if let Ok(a) = stream.peer_addr() {
-                self.connects.write().await.push(a);
+            let (tx, rx) = flume::unbounded();
+            let semaphore = Arc::new(Semaphore::new(concurrent_attempts as usize));
+
+            for t in targets.iter() {
+                for p in port_range.0..=port_range.1 {
+                    tokio::spawn(Self::attempt_connect(
+                        tx.clone(),
+                        *t,
+                        p,
+                        self.clone(),
+                        semaphore.clone(),
+                    ));
+                }
             }
-            if let Some(h) = &(*self.handler.read().await) {
-                h.handle(stream).await;
+
+            drop(tx);
+
+            *self.semaphore.lock().await = Some(semaphore);
+            while let Ok(stream) = rx.recv_async().await {
+                if let Ok(a) = stream.peer_addr() {
+                    self.connects.write().await.push(a);
+                }
+                if let Some(h) = &(*self.handler.read().await) {
+                    h.handle(stream).await;
+                }
             }
+
+            *self.target_count.write().await = target_count;
+
+            *self.state.write().await = ScannerState::Complete;
         }
-
-        *self.target_count.write().await = target_count;
-
-        *self.state.write().await = ScannerState::Complete;
     }
 
     async fn attempt_connect(

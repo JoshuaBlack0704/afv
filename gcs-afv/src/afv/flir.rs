@@ -52,6 +52,7 @@ pub trait Controller: Send + Sync{
 
 /// Directly controls the a50
 pub struct Actuator{
+    peer_addr: RwLock<Option<SocketAddr>>,
     com: Arc<ComEngine<AfvMessage>>,    
 }
 
@@ -149,7 +150,16 @@ impl Actuator{
     pub async fn new(com: Arc<ComEngine<AfvMessage>>) -> Arc<Actuator> {
         let controller = Arc::new(Self{
             com: com.clone(),
+            peer_addr: RwLock::new(None),
         });
+        
+        let ip = match local_ip_address::local_ip().expect("Could not get local ip addr") {
+            std::net::IpAddr::V4(i) => i,
+            std::net::IpAddr::V6(i) => i.to_ipv4_mapped().expect("Could net get ipv4 addr"),
+        };
+        println!("Looking for rtsp stream on network {}", ip);
+        let subnet = Ipv4Addr::new(255, 255, 255, 0);
+        let scanner = Scanner::new_with_config(ip.into(), subnet, (554, 554), 256).await;
         com.add_listener(controller.clone()).await;
         controller
     }
@@ -157,7 +167,67 @@ impl Actuator{
 
 impl Controller for Actuator{
     fn stream(self:Arc<Self>) -> flume::Receiver<Vec<u8> >  {
-        todo!()
+        let (tx, rx) = flume::unbounded();
+        let a50 = self.clone();
+        tokio::spawn(async move {
+            let peer_addr = match *a50.peer_addr.read().await {
+                Some(a) => a,
+                None => {println!("No peer addr available for rtsp stream");return},
+            };
+
+            // We must attempt to establish an rtsp stream
+            let url = match Url::parse(&format!("rtsp://:@{}:554/avc", peer_addr.ip())) {
+                Ok(u) => u,
+                Err(_) => return,
+            };
+
+            // We must first attempt to stream an image from the flir
+            let mut options = SessionOptions::default();
+            options = options.user_agent(String::from("demo"));
+
+            let mut session = match client::Session::describe(url, options).await {
+                Ok(s) => s,
+                Err(_) => return,
+            };
+
+            let options = SetupOptions::default();
+            if let Err(_) = session.setup(0, options).await {
+                return;
+            }
+
+            let options = PlayOptions::default();
+            let play = match session.play(options).await {
+                Ok(p) => p,
+                Err(_) => return,
+            };
+
+            let demux = match play.demuxed() {
+                Ok(d) => d,
+                Err(_) => return,
+            };
+            println!("Rtsp stream opened on {}", peer_addr);
+
+            tokio::pin!(demux);
+
+            while !tx.is_disconnected() {
+                let mut encoded_data = vec![];
+
+                let frame = demux.next().await;
+                match frame {
+                    Some(f) => {
+                        if let Ok(retina::codec::CodecItem::VideoFrame(v)) = f {
+                            encoded_data.extend_from_slice(v.data());
+                            if let Err(_) = tx.send_async(encoded_data).await {
+                                break;
+                            }
+                        }
+                    }
+                    None => {}
+                };
+            }
+            println!("Rtsp stream request closed");
+        });
+        rx
     }
 }
 
@@ -340,7 +410,7 @@ impl RtspSession {
         };
         println!("Looking for rtsp stream on network {}", ip);
         let subnet = Ipv4Addr::new(255, 255, 255, 0);
-        let scanner = Scanner::new_with_config(rt, ip.into(), subnet, (554, 554), 256).await;
+        let scanner = Scanner::new_with_config(ip.into(), subnet, (554, 554), 256).await;
         let rtsp = Arc::new(Self {
             peer_addr: RwLock::new(None),
         });

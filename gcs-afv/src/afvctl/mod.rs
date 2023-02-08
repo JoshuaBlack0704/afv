@@ -87,8 +87,8 @@ impl AfvController {
         }
     }
     fn create_scanner(self: Arc<Self>) -> Arc<Scanner> {
-        let scanner = Scanner::new(Some(self.rt.clone()));
-        scanner.set_handler_blocking(self);
+        let scanner = Scanner::new_blocking(self.rt.clone());
+        scanner.set_handler_blocking(self.rt.clone(), self);
         scanner
     }
     pub fn spawn_dummy(self: &Arc<Self>) {

@@ -10,7 +10,7 @@ fn main(){
     let rt = Arc::new(tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("Could not build runtime"));
     rt.spawn(pulse());
     let args = Arc::new(Args{});
-    let scanner = Arc::new(Scanner::new(Some(rt.clone())));
+    let scanner = Arc::new(Scanner::new_blocking(rt.clone()));
     TerminalBuilder::new().add_element(scanner).launch(&args);
 }
 
