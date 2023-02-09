@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use tokio::{net::ToSocketAddrs, runtime::Runtime, sync::RwLock};
+use tokio::{net::ToSocketAddrs, sync::RwLock};
 
 use crate::{network::{ComEngine, AfvMessage, NetworkLogger}, gui::GuiElement};
 
-use self::flir::{A50, RtspSession, A50Link};
+use self::flir::Flir;
 
 pub mod flir;
 
@@ -12,23 +12,12 @@ pub mod flir;
 pub struct Afv{
     open: RwLock<bool>,
     com: Arc<ComEngine<AfvMessage>>,
-    a50: Arc<A50>,
+    a50: Arc<Flir>,
 }
 
 impl Afv{
-    pub async fn new(rt: Option<Arc<Runtime>>, com: Arc<ComEngine<AfvMessage>>) -> Arc<Self> {
-        let rt = match rt {
-            Some(r) => r,
-            None => Arc::new(
-                tokio::runtime::Builder::new_multi_thread()
-                    .enable_all()
-                    .build()
-                    .expect("Could not build runtime"),
-            ),
-        };
-        let rtsp = RtspSession::new_blocking(rt.clone());
-        let a50 = A50::new(Some(rt.clone()), Arc::new(rtsp.clone()));
-        com.add_listener(a50.clone()).await;
+    pub async fn new(com: Arc<ComEngine<AfvMessage>>) -> Arc<Self> {
+        let a50 = Flir::actuated(Some(com.clone())).await;
         NetworkLogger::afv_com_monitor(&com).await;
         Arc::new(
             Self{
@@ -38,19 +27,8 @@ impl Afv{
             }
         )
     }
-    pub async fn link(rt: Option<Arc<Runtime>>, com: Arc<ComEngine<AfvMessage>>) -> Arc<Afv>{
-        let rt = match rt {
-            Some(r) => r,
-            None => Arc::new(
-                tokio::runtime::Builder::new_multi_thread()
-                    .enable_all()
-                    .build()
-                    .expect("Could not build runtime"),
-            ),
-        };
-        let link = A50Link::new(com.clone()).await;
-        let a50 = A50::new(Some(rt.clone()), Arc::new(link.clone()));
-        a50.clone().refresh_interval(tokio::time::Duration::from_millis(1000));
+    pub async fn link(com: Arc<ComEngine<AfvMessage>>) -> Arc<Afv>{
+        let a50 = Flir::linked(com.clone()).await;
         // NetworkLogger::afv_com_monitor(&com).await;
         Arc::new(
             Self{
@@ -61,20 +39,9 @@ impl Afv{
         )
     }
 
-    pub async fn dummy(rt: Option<Arc<Runtime>>, addr: impl ToSocketAddrs) -> Arc<Afv> {
-        let rt = match rt {
-            Some(r) => r,
-            None => Arc::new(
-                tokio::runtime::Builder::new_multi_thread()
-                    .enable_all()
-                    .build()
-                    .expect("Could not build runtime"),
-            ),
-        };
+    pub async fn dummy(addr: impl ToSocketAddrs) -> Arc<Afv> {
         let com = ComEngine::afv_com_listen(addr).await.expect("Dummy afv could not establish connection");
-        let rtsp = RtspSession::new().await;
-        let a50 = A50::new(Some(rt.clone()), Arc::new(rtsp.clone()));
-        com.add_listener(a50.clone()).await;
+        let a50 = Flir::actuated(Some(com.clone())).await;
         NetworkLogger::afv_com_monitor(&com).await;
         Arc::new(Self{
             com,
@@ -86,7 +53,7 @@ impl Afv{
 
 impl GuiElement for Arc<Afv>{
     fn open(&self) -> tokio::sync::RwLockWriteGuard<bool> {
-        self.open.blocking_write()
+        self.a50.open()
     }
 
     fn name(&self) -> String {

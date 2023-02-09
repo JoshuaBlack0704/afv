@@ -4,7 +4,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use eframe::egui::{self, Ui};
+use eframe::egui::{self, Ui, Layout};
 use tokio::{
     net::TcpStream,
     runtime::Runtime,
@@ -59,7 +59,7 @@ impl Scanner {
             state: RwLock::new(ScannerState::Available),
             open: RwLock::new(false),
             target_count: RwLock::new(0),
-            parallel_attempts: RwLock::new(100),
+            parallel_attempts: RwLock::new(1000),
             semaphore: Mutex::new(None),
             handler: RwLock::new(None),
             connects: RwLock::new(vec![]),
@@ -143,7 +143,7 @@ impl Scanner {
 
         let mut g_octets = gateway.octets();
         let mut s_octets = subnet.octets();
-        ui.vertical_centered(|ui| {
+        ui.vertical_centered_justified(|ui| {
             egui::Grid::new("Scanner options")
                 .num_columns(5)
                 .spacing([5.0, 5.0])
@@ -207,6 +207,20 @@ impl Scanner {
             if ui.button("Loopback").clicked() {
                 *gateway = Ipv4Addr::new(127, 0, 0, 1);
                 *subnet = Ipv4Addr::new(255, 255, 255, 255);
+            }
+            if ui.button("Local Ip").clicked(){
+                let ip = match local_ip_address::local_ip() {
+                    Ok(ip) => {
+                        let mut res = Ipv4Addr::new(192, 168, 1, 1);
+                        if let IpAddr::V4(i) = ip {
+                            res = i
+                        }
+                        res
+                    }
+                    Err(_) => Ipv4Addr::new(192, 168, 1, 1),
+                };
+                *gateway = ip;
+                *subnet = Ipv4Addr::new(255, 255, 255, 0);
             }
             if ui.button("Start").clicked() {
                 let _ = self.request_dispatch_blocking();

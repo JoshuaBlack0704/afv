@@ -11,7 +11,7 @@ use tokio::{
 use crate::{
     afv::Afv,
     gui::GuiElement,
-    network::{ComEngine, NetworkLogger, AFVPORT},
+    network::{ComEngine, AFVPORT, NetworkLogger},
     scanner::{Scanner, ScannerStreamHandler},
 };
 
@@ -20,7 +20,7 @@ pub struct AfvController {
     open: RwLock<bool>,
     scanner: Mutex<Option<Arc<Scanner>>>,
     afv_links: RwLock<Vec<Arc<Afv>>>,
-    dummy: RwLock<Option<Arc<Afv>>>,
+    dummy: RwLock<Option<Vec<Arc<Afv>>>>,
 }
 
 impl AfvController {
@@ -50,11 +50,14 @@ impl AfvController {
                 self.scanner_ui(ui);
                 let links = self.afv_links.blocking_read();
                 for afv in links.iter() {
+                    let mut open = afv.open();
                     if ui.button(afv.name()).clicked(){
-                        for afv in links.iter(){
-                            *afv.open() = false;
+                        for _afv in links.iter(){
+                            if !std::ptr::eq(_afv, afv){
+                                *_afv.open() = false;
+                            }
                         }
-                        *afv.open() = true;
+                        *open = true;
                     }
                 }
             });
@@ -95,8 +98,9 @@ impl AfvController {
         self.rt.spawn(self.clone().dummy());
     }
     async fn dummy(self: Arc<Self>) {
-        let afv = Afv::dummy(Some(self.rt.clone()), format!("127.0.0.1:{}", AFVPORT)).await;
-        *self.dummy.write().await = Some(afv);
+        let afv1 = Afv::dummy(format!("127.0.0.1:{}", AFVPORT)).await;
+        let afv2 = Afv::dummy(format!("127.0.0.1:{}", AFVPORT + 1)).await;
+        *self.dummy.write().await = Some(vec![afv1, afv2]);
     }
 }
 
@@ -106,7 +110,7 @@ impl ScannerStreamHandler for AfvController {
         let com = ComEngine::afv_com_stream(stream);
         println!("Establishing connection with afv at {}", com.peer_addr());
         NetworkLogger::afv_com_monitor(&com).await;
-        self.afv_links.write().await.push(Afv::link(Some(self.rt.clone()),com).await);
+        self.afv_links.write().await.push(Afv::link(com).await);
     }
 }
 

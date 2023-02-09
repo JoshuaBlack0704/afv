@@ -4,15 +4,16 @@ use std::{
 };
 
 use async_trait::async_trait;
-use eframe::{egui, epaint::TextureHandle};
+use eframe::{egui::{self, plot::{PlotImage, PlotPoint, Points, Arrows}}, epaint::{TextureHandle, Color32}};
 use futures::StreamExt;
+use glam::Vec2;
 use image::{DynamicImage, ImageBuffer};
 use openh264::{decoder::Decoder, nal_units, to_bitstream_with_001_be};
 use retina::client::{self, PlayOptions, SessionOptions, SetupOptions};
 use serde::{Deserialize, Serialize};
 use tokio::{
     net::TcpStream,
-    runtime::Runtime,
+    runtime::{Runtime, Handle},
     sync::RwLock,
     time::{sleep, Duration},
 };
@@ -26,21 +27,18 @@ use crate::{
 
 pub const RTSP_IDLE_TIME: Duration = Duration::from_secs(1);
 pub const LINK_IDLE_TIME: Duration = Duration::from_secs(10);
+pub const FLIR_ATTEMPT_CONNECT_TIME: Duration = Duration::from_secs(3);
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum FlirMsg {
+    /// Opens a stream with a specified update frequency
     OpenStream,
+    #[serde(with = "serde_bytes")]
     Nal(Vec<u8>),
     CloseStream,
-}
-
-#[async_trait]
-pub trait IrSource: Send + Sync {
-    /// Will return a complete nal frame using the retina avc demuxer
-    fn stream(&self) -> flume::Receiver<Vec<u8>>;
-    /// Will return a complete rgb image by polling the ir cam via
-    /// next until a successful decode is achieved
-    async fn image(&self) -> DynamicImage;
+    SetFilter(u8),
+    ReportFilter,
+    AfvFilter(u8),
 }
 
 #[async_trait]
@@ -48,13 +46,15 @@ pub trait IrSource: Send + Sync {
 pub trait Controller: Send + Sync{
     /// Will start a nal packet stream
     fn stream(self: Arc<Self>) -> flume::Receiver<Vec<u8>>;
+    /// Will start a bounded nal packet stream
+    fn discard_stream(self: Arc<Self>, bound: usize) -> flume::Receiver<Vec<u8>>;
 }
 
 /// Directly controls the a50
 pub struct Actuator{
     peer_addr: RwLock<Option<SocketAddr>>,
     open_stream: RwLock<bool>,
-    com: Option<Arc<ComEngine<AfvMessage>>>,    
+    _com: Option<Arc<ComEngine<AfvMessage>>>,    
 }
 
 /// Sends commands and recieved data from an actuator through a comengine
@@ -65,38 +65,109 @@ pub struct Link{
 
 /// High level system for interacting with a flir
 pub struct Flir{
+    handle: Handle,
+    com: Option<Arc<ComEngine<AfvMessage>>>,
     open: RwLock<bool>,
     live: RwLock<bool>,
     controller: Arc<dyn Controller>,
     image_data: RwLock<DynamicImage>,
+    processed_image: RwLock<DynamicImage>,
     gui_image: RwLock<Option<TextureHandle>>,
+    upper_centroid: RwLock<Vec2>,
+    lower_centroid: RwLock<Vec2>,
+    filter_value: RwLock<u8>,
+    afv_filter: RwLock<u8>,
+    show_filtered: RwLock<bool>,
 }
 
 impl Flir{
     pub async fn actuated(com: Option<Arc<ComEngine<AfvMessage>>>) -> Arc<Flir> {
-        let controller = Actuator::new(com).await;
-        Arc::new(Self{
+        let controller = Actuator::new(com.clone()).await;
+        let flir = Arc::new(Self{
             open: RwLock::new(false),
             controller,
             image_data: RwLock::new(DynamicImage::new_rgb8(100,100)),
             gui_image: RwLock::new(None),
             live: RwLock::new(false),
-        })
+            handle: Handle::current(),
+            upper_centroid: Default::default(),
+            lower_centroid: Default::default(),
+            processed_image: RwLock::new(DynamicImage::new_rgb8(100,100)),
+            filter_value: Default::default(),
+            show_filtered: Default::default(),
+            com: com.clone(),
+            afv_filter: Default::default(),
+        });
+        if let Some(com) = com{
+            com.add_listener(flir.clone()).await;
+        }
+        flir
     }
     pub fn actuated_blocking(rt: Arc<Runtime>, com: Option<Arc<ComEngine<AfvMessage>>>) -> Arc<Flir> {
         rt.block_on(Self::actuated(com))
     }
     pub async fn linked(com: Arc<ComEngine<AfvMessage>>) -> Arc<Flir> {
-        let controller = Link::new(com).await;
-        Arc::new(Self{
+        let controller = Link::new(com.clone()).await;
+        let flir = Arc::new(Self{
             open: RwLock::new(false),
             controller,
             image_data: RwLock::new(DynamicImage::new_rgb8(100,100)),
             gui_image: RwLock::new(None),
             live: RwLock::new(false),
-        })
-        
+            handle: Handle::current(),
+            upper_centroid: Default::default(),
+            lower_centroid: Default::default(),
+            processed_image: RwLock::new(DynamicImage::new_rgb8(100,100)),
+            filter_value: Default::default(),
+            show_filtered: Default::default(),
+            com: Some(com.clone()),
+            afv_filter: Default::default(),
+        });
+        com.add_listener(flir.clone()).await;
+        flir
     }
+    fn analyze_image(self: Arc<Self>){
+        let image = self.image_data.blocking_read().clone();
+        let mut processed_image = self.processed_image.blocking_write();
+        *processed_image = DynamicImage::new_rgb8(image.width(), image.height());
+        let rgb = image.as_rgb8().expect("Could not represent as rgb image");
+        let processed_rgb = processed_image.as_mut_rgb8().expect("Could not represent as rgb image");
+        let mut pixels = Vec::with_capacity((rgb.width()*rgb.height()*3) as usize);
+
+        let filter_value = *self.filter_value.blocking_read();
+
+        for (x,y,pix) in rgb.enumerate_pixels().filter(|(_,_,pix)| {pix.0[0] > filter_value}){
+            processed_rgb.put_pixel(x,y,*pix);
+            pixels.push((x,y))
+        }
+
+        drop(image);
+        drop(processed_image);
+
+        if pixels.len() <= 10{
+            *self.lower_centroid.blocking_write() = Vec2::new(0.0, 0.0);
+            *self.upper_centroid.blocking_write() = Vec2::new(0.0, 0.0);
+            return;
+        }
+
+
+        pixels.sort_unstable_by_key(|(_, y)| *y);
+        let pix_count = pixels.len();
+
+        let (lpix, upix) = pixels.split_at_mut(pix_count/2);
+        
+        let lower_y_median = lpix[lpix.len()/2];
+        lpix.sort_unstable_by_key(|(x,_)| *x);
+        let lower_x_median = lpix[lpix.len()/2];
+        *self.lower_centroid.blocking_write() = Vec2::new(lower_x_median.0 as f32, lower_y_median.1 as f32);
+        
+        let upper_y_median = upix[upix.len()/2];
+        upix.sort_unstable_by_key(|(x,_)| *x);
+        let upper_x_median = upix[upix.len()/2];
+        *self.upper_centroid.blocking_write() = Vec2::new(upper_x_median.0 as f32, upper_y_median.1 as f32);
+
+    }
+    
     pub fn linked_blocking(rt: Arc<Runtime>, com: Arc<ComEngine<AfvMessage>>) -> Arc<Flir> {
         rt.block_on(Self::linked(com))
     }
@@ -106,6 +177,9 @@ impl Flir{
     }
     pub async fn stop_feed(&self){
         *self.live.write().await = false;
+    }
+    pub fn stop_feed_blocking(&self){
+        *self.live.blocking_write() = false;
     }
     pub async fn feed(self: Arc<Self>){
         let stream = self.controller.clone().stream();
@@ -126,7 +200,7 @@ impl Flir{
             for p in nal_units(&nal){
                 if let Ok(Some(yuv)) = decoder.decode(&p){
                     let image_size = yuv.dimension_rgb();
-                    let mut rgb_data = vec![0; image_size.0*image_size.1];
+                    let mut rgb_data = vec![0; image_size.0*image_size.1*3];
                     yuv.write_rgb8(&mut rgb_data);
                     let image_data = match ImageBuffer::from_raw(
                         image_size.0 as u32,
@@ -136,8 +210,11 @@ impl Flir{
                         Some(i) => i,
                         None => continue,
                     };
-                    *self.image_data.write().await = DynamicImage::ImageRgb8(image_data);
+                    *self.image_data.write().await = DynamicImage::ImageRgb8(image_data.clone());
                     *self.gui_image.write().await = None;
+                    // self.clone().analyze_image().await;
+                    let flir = self.clone();
+                    self.handle.spawn_blocking(move || {flir.clone().analyze_image()});
                 }
             }
 
@@ -151,10 +228,16 @@ impl Flir{
             return i.clone();
         }
 
-        let image = self.image_data.blocking_read();
+        let image;
+        if *self.show_filtered.blocking_read(){
+           image = self.processed_image.blocking_read();
+        }
+        else{
+           image = self.image_data.blocking_read();
+        }
         let rgb = image.as_rgb8().unwrap();
         let pixels = rgb.as_flat_samples();
-        let size = [image.width() as usize, image.height() as usize];
+        let size = [rgb.width() as usize, rgb.height() as usize];
         let color_image = egui::ColorImage::from_rgb(size, pixels.as_slice());
         let handle = ui.ctx().load_texture("Flir Output", color_image, Default::default());
 
@@ -163,10 +246,34 @@ impl Flir{
     }
 }
 
-impl GuiElement for Flir{
+#[async_trait]
+impl AfvComService<AfvMessage> for Flir{
+    async fn notify(self: Arc<Self>, _com: Arc<ComEngine<AfvMessage>>, msg: AfvMessage){
+        if let AfvMessage::FlirMsg(FlirMsg::SetFilter(val)) = msg{
+            *self.filter_value.write().await = val;
+            return;
+        }
+        
+        if let AfvMessage::FlirMsg(FlirMsg::ReportFilter) = msg{
+            if let Some(com) = &self.com{
+                let _ = com.send(AfvMessage::FlirMsg(FlirMsg::AfvFilter(*self.filter_value.read().await))).await;
+            }
+            return;
+        }
+        
+        if let AfvMessage::FlirMsg(FlirMsg::AfvFilter(val)) = msg{
+            *self.afv_filter.write().await = val;
+            return;
+        }
+    }
+}
+
+impl GuiElement for Arc<Flir>{
     fn open(&self) -> tokio::sync::RwLockWriteGuard<bool> {
         let open = self.open.blocking_write();
-        *self.live.blocking_write() = *open;
+        if !*open{
+            *self.live.blocking_write() = false;
+        }
         open
     }
 
@@ -175,18 +282,86 @@ impl GuiElement for Flir{
     }
 
     fn render(&self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui|{
+            let mut filter = self.show_filtered.blocking_write();
+            let mut live = self.live.blocking_write();
+
+            if *live{
+                if ui.button("Stop feed").clicked(){
+                    *live = false;
+                }
+            }
+            else{
+                if ui.button("Start feed").clicked(){
+                    self.handle.spawn(self.clone().live_feed());
+                }
+            }
+            
+            ui.toggle_value(&mut filter, "Show filtered image");
+        });
+        ui.horizontal(|ui|{
+            let mut filter_value = self.filter_value.blocking_write();
+            let mut drag_value = *filter_value;
+            ui.label("Filter Value: ");
+            let drag = egui::widgets::DragValue::new(&mut drag_value).clamp_range(0..=u8::MAX);
+            ui.add(drag);
+            if let Some(com) = &self.com{
+                if ui.button("Send filter value to afv").clicked(){
+                    self.handle.spawn(com.clone().send_into(AfvMessage::FlirMsg(FlirMsg::SetFilter(drag_value))));
+                }
+            }
+            *filter_value = drag_value;
+            
+        });
+        if let Some(com) = &self.com{
+            ui.horizontal(|ui|{
+                let filter_value = self.afv_filter.blocking_read();
+                ui.label(format!("Afv filter Value: {}", *filter_value));
+                if ui.button("Request Afv filter value").clicked(){
+                    self.handle.spawn(com.clone().send_into(AfvMessage::FlirMsg(FlirMsg::ReportFilter)));
+                }
+            });
+        }
         let gui_image = self.get_gui_image(ui);
-        ui.image(gui_image.id(), ui.available_size());
+        let gui_image_size = gui_image.size_vec2();
+        let size = ui.available_size();
+        let lower_centroid = *self.lower_centroid.blocking_read();
+        let upper_centroid = *self.upper_centroid.blocking_read();
+
+        let lower_centroid = [lower_centroid.x as f64, -lower_centroid.y as f64];
+        let upper_centroid = [upper_centroid.x as f64, -upper_centroid.y as f64];
+        let points = Points::new(vec![lower_centroid, upper_centroid])
+        .shape(egui::plot::MarkerShape::Circle)
+        .filled(true)
+        .radius(5.0)
+        .name("Centroids");
+        let arrow = Arrows::new(vec![upper_centroid], vec![lower_centroid])
+        .color(Color32::RED)
+        .name("Fire Axis");
+        // ui.image(gui_image.id(), ui.available_size());
+        egui::widgets::plot::Plot::new("Flir plot")
+            .show_background(false)
+            .width(size.x)
+            .height(size.y)
+            .include_x(gui_image_size.x)
+            .include_y(-gui_image_size.y)
+            .label_formatter(|_name, value| {format!("    {:.0}, {:.0}", value.x, value.y.abs())})
+            .y_axis_formatter(|y, _range| {y.abs().to_string()})
+            .show(ui, |ui|{
+            let image = PlotImage::new(gui_image.id(), PlotPoint::new(gui_image_size.x/2.0,-gui_image_size.y/2.0), gui_image_size);
+            ui.image(image);
+            ui.points(points);
+            ui.arrows(arrow);
+        });
     }
 }
-
 
 /// Actuator Impl
 
 impl Actuator{
     pub async fn new(com: Option<Arc<ComEngine<AfvMessage>>>) -> Arc<Actuator> {
         let controller = Arc::new(Self{
-            com: com.clone(),
+            _com: com.clone(),
             peer_addr: RwLock::new(None),
             open_stream: RwLock::new(false),
         });
@@ -195,7 +370,7 @@ impl Actuator{
             std::net::IpAddr::V4(i) => i,
             std::net::IpAddr::V6(i) => i.to_ipv4_mapped().expect("Could net get ipv4 addr"),
         };
-        println!("Looking for flir in network {}", ip);
+        println!("FLIR ACTUATOR: Looking for flir in network {}", ip);
         let subnet = Ipv4Addr::new(255, 255, 255, 0);
         let scanner = Scanner::new_with_config(ip.into(), subnet, (554, 554), 256).await;
         tokio::spawn(controller.clone().flir_repeat_connect(scanner));
@@ -207,10 +382,11 @@ impl Actuator{
     async fn flir_repeat_connect(self: Arc<Self>, scanner: Arc<Scanner>){
         scanner.set_handler(self.clone()).await;
         while let None = *self.peer_addr.read().await{
-            let _ = scanner.request_dispatch().await;
             println!("Attempting Flir connection");
+            let _ = scanner.request_dispatch().await;
+            sleep(FLIR_ATTEMPT_CONNECT_TIME).await;
         }
-        println!("Connected to FLIR at {:?}", *self.peer_addr.read().await);
+        println!("FLIR ACTUATOR: Connected to FLIR at {:?}", *self.peer_addr.read().await);
     }
 }
 
@@ -270,7 +446,7 @@ impl Controller for Actuator{
                 Ok(d) => d,
                 Err(_) => return,
             };
-            println!("Rtsp stream opened on {}", peer_addr);
+            println!("FLIR ACTUATOR: Rtsp stream opened on {}", peer_addr);
 
             tokio::pin!(demux);
 
@@ -290,7 +466,26 @@ impl Controller for Actuator{
                     None => {}
                 };
             }
-            println!("Rtsp stream closed");
+            println!("FLIR ACTUATOR: Rtsp stream closed");
+        });
+        rx
+    }
+    fn discard_stream(self: Arc<Self>, bound: usize) -> flume::Receiver<Vec<u8>>{
+        let (tx, rx) = flume::bounded(bound);
+        let stream = self.clone().stream();
+        tokio::spawn(async move {
+            while let Ok(p) = stream.recv_async().await{
+                println!("Bounded stream testing new data");
+                match tx.try_send(p){
+                    Ok(_) => {},
+                    Err(e) => {
+                        match e{
+                            flume::TrySendError::Full(_) => continue,
+                            flume::TrySendError::Disconnected(_) => break,
+                        }
+                    },
+                }
+            }
         });
         rx
     }
@@ -300,19 +495,20 @@ impl Controller for Actuator{
 impl AfvComService<AfvMessage> for Actuator{
     async fn notify(self: Arc<Self>, com: Arc<ComEngine<AfvMessage>>, msg: AfvMessage){
         if let AfvMessage::FlirMsg(FlirMsg::OpenStream) = msg{
-            println!("Starting Flir network stream");
+            println!("FLIR ACTUATOR: Starting Flir network stream");
             {
                 *self.open_stream.write().await = true;
             }
             let stream = self.clone().stream();
             while *self.open_stream.read().await{
                if let Ok(p) = stream.recv_async().await{
+                    // tokio::spawn(com.clone().send_parallel(AfvMessage::FlirMsg(FlirMsg::Nal(p))));
                     let _ = com.send(AfvMessage::FlirMsg(FlirMsg::Nal(p))).await;
                     continue;
                 } 
                 *self.open_stream.write().await = false;
             }
-            println!("Stopping Flir network stream");
+            println!("FLIR ACTUATOR: Stopping Flir network stream");
             return;
         }
         if let AfvMessage::FlirMsg(FlirMsg::CloseStream) = msg{
@@ -342,8 +538,9 @@ impl Controller for Link{
         let (n_tx, n_rx) = flume::unbounded();
         let (s_tx, s_rx) = flume::unbounded();
         let link = self.clone();
-        println!("Attempting remote flir network stream");
         tokio::spawn(async move{
+            println!("FLIR LINK: Attempting remote flir network stream");
+            let _ = link.com.send(AfvMessage::FlirMsg(FlirMsg::OpenStream)).await;
             {
                 *self.network_channel.write().await = Some(n_tx);
             }
@@ -351,7 +548,7 @@ impl Controller for Link{
                 let p;
                 tokio::select!{
                     _ = sleep(LINK_IDLE_TIME) => {
-                        println!("Remote flir network stream timeout");
+                        println!("FLIR LINK: Remote flir network stream timeout");
                         break;
                     }
                     val = n_rx.recv_async() => {
@@ -370,9 +567,27 @@ impl Controller for Link{
             }
             let _ = link.com.send(AfvMessage::FlirMsg(FlirMsg::CloseStream)).await;
             *link.network_channel.write().await = None;
-            println!("Closed remote flir network stream");
+            println!("FLIR LINK: Closed remote flir network stream");
         });
         s_rx
+    }
+    fn discard_stream(self: Arc<Self>, bound: usize) -> flume::Receiver<Vec<u8>>{
+        let (tx, rx) = flume::bounded(bound);
+        let stream = self.clone().stream();
+        tokio::spawn(async move {
+            while let Ok(p) = stream.recv_async().await{
+                match tx.try_send(p){
+                    Ok(_) => todo!(),
+                    Err(e) => {
+                        match e{
+                            flume::TrySendError::Full(_) => continue,
+                            flume::TrySendError::Disconnected(_) => break,
+                        }
+                    },
+                }
+            }
+        });
+        rx
     }
 }
 
@@ -383,442 +598,6 @@ impl AfvComService<AfvMessage> for Link{
             if let Some(tx) = &(*self.network_channel.read().await){
                 let _ = tx.send_async(p).await;
             }
-        }
-    }
-}
-
-
-/// The driver for the Flir A50
-pub struct A50 {
-    rt: Arc<Runtime>,
-    open: RwLock<bool>,
-    source: Arc<dyn IrSource>,
-    image_data: RwLock<DynamicImage>,
-    gui_image: RwLock<Option<TextureHandle>>,
-    network_stream: RwLock<bool>,
-}
-
-/// Will attempt to establish a RTSP session with a flir camera
-pub struct RtspSession {
-    peer_addr: RwLock<Option<SocketAddr>>,
-}
-
-/// Will conduct communication over the network to gather data needed for
-/// ir image reconstruction
-pub struct A50Link {
-    com: Arc<ComEngine<AfvMessage>>,
-    network_stream: RwLock<Option<flume::Sender<Vec<u8>>>>,
-}
-
-
-
-
-
-impl A50{
-    pub fn new(rt: Option<Arc<Runtime>>, source: Arc<dyn IrSource>) -> Arc<Self> {
-        let rt = match rt {
-            Some(r) => r,
-            None => Arc::new(
-                tokio::runtime::Builder::new_multi_thread()
-                    .enable_all()
-                    .build()
-                    .expect("Could not build runtime"),
-            ),
-        };
-        Arc::new(Self {
-            source,
-            open: RwLock::new(false),
-            image_data: RwLock::new(DynamicImage::default()),
-            gui_image: RwLock::new(None),
-            rt,
-            network_stream: RwLock::new(false),
-        })
-    }
-    pub fn load_gui_image(&self, ui: &egui::Ui) -> TextureHandle {
-        let image = self.image_data.blocking_read().to_rgb8();
-        let pixels = image.as_flat_samples();
-        let size = [image.width() as usize, image.height() as usize];
-        let color_image = eframe::egui::ColorImage::from_rgb(size, pixels.as_slice());
-        let texture = ui
-            .ctx()
-            .load_texture("Flir Output", color_image, Default::default());
-        texture
-    }
-    pub fn refresh_interval(self: Arc<Self>, interval: Duration) {
-        if interval == Duration::from_secs(0) {
-            self.rt.spawn(self.clone().periodic_refresh(None));
-        } else {
-            self.rt.spawn(self.clone().periodic_refresh(Some(interval)));
-        }
-    }
-    pub async fn periodic_refresh(self: Arc<Self>, interval: Option<Duration>) {
-        println!("Refresh");
-        while Arc::strong_count(&self) > 1 {
-            let image = self.source.image().await;
-            *self.image_data.write().await = image;
-            *self.gui_image.write().await = None;
-            match interval {
-                Some(i) => {
-                    sleep(i).await;
-                }
-                None => {}
-            }
-        }
-    }
-}
-
-impl GuiElement for A50{
-    fn open(&self) -> tokio::sync::RwLockWriteGuard<bool> {
-        self.open.blocking_write()
-    }
-
-    fn name(&self) -> String {
-        "A50".into()
-    }
-
-    fn render(&self, ui: &mut egui::Ui) {
-        let mut gui_lock = self.gui_image.blocking_write();
-        let gui_image = gui_lock.get_or_insert(self.load_gui_image(ui));
-        ui.image(gui_image.id(), ui.available_size());
-    }
-}
-
-#[async_trait]
-impl AfvComService<AfvMessage> for A50{
-    async fn notify(self: Arc<Self>, com: Arc<ComEngine<AfvMessage>>, msg: AfvMessage){
-        if let AfvMessage::FlirMsg(FlirMsg::OpenStream) = msg{
-            {
-                let mut open = self.network_stream.write().await;
-                if *open{
-                    return;
-                }
-                else{
-                    *open = true;
-                }
-            }
-
-            let stream = self.source.stream();
-            tokio::spawn(async move {
-            println!("Attempting network rtsp stream");
-                while let Ok(p) = stream.recv_async().await{
-                    if !*self.network_stream.read().await{
-                        break;
-                    }
-
-                    let packet = FlirMsg::Nal(p);
-                    let _ = com.send(AfvMessage::FlirMsg(packet)).await;
-                }
-                *self.network_stream.write().await = false;
-            println!("Finished network rtsp stream");
-            });
-            return;
-        }
-        
-        if let AfvMessage::FlirMsg(FlirMsg::CloseStream) = msg{
-            println!("Closing rtsp network stream");
-            *self.network_stream.write().await = false;
-        }
-        
-        if let AfvMessage::Closed = msg{
-            *self.network_stream.write().await = false;
-        }
-    }
-}
-
-impl RtspSession {
-    pub async fn new() -> Arc<Self> {
-        let ip = match local_ip_address::local_ip().expect("Could not get local ip addr") {
-            std::net::IpAddr::V4(i) => i,
-            std::net::IpAddr::V6(i) => i.to_ipv4_mapped().expect("Could net get ipv4 addr"),
-        };
-        println!("Looking for rtsp stream on network {}", ip);
-        let subnet = Ipv4Addr::new(255, 255, 255, 0);
-        let scanner = Scanner::new_with_config(ip.into(), subnet, (554, 554), 256).await;
-        let rtsp = Arc::new(Self {
-            peer_addr: RwLock::new(None),
-        });
-
-        tokio::spawn(rtsp.clone().attempt_connection(scanner));
-        rtsp
-    }
-    pub fn new_blocking(rt: Arc<Runtime>) -> Arc<RtspSession> {
-        rt.block_on(Self::new())
-    }
-    pub async fn attempt_connection(self: Arc<Self>, scanner: Arc<Scanner>) {
-        scanner.set_handler(self.clone()).await;
-        let mut connected = false;
-        while !connected {
-            match *self.peer_addr.read().await {
-                Some(_) => connected = true,
-                None => {
-                    println!("Attempting connection to flir camera");
-                    let _ = scanner.request_dispatch().await;
-                    sleep(RTSP_IDLE_TIME).await;
-                }
-            }
-        }
-        println!("Flir connection task stopping");
-    }
-}
-
-#[async_trait]
-impl IrSource for Arc<RtspSession> {
-    fn stream(&self) -> flume::Receiver<Vec<u8>> {
-        let (tx, rx) = flume::unbounded();
-        let a50 = self.clone();
-        tokio::spawn(async move {
-            let peer_addr = match *a50.peer_addr.read().await {
-                Some(a) => a,
-                None => {println!("No peer addr available for rtsp stream");return},
-            };
-
-            // We must attempt to establish an rtsp stream
-            let url = match Url::parse(&format!("rtsp://:@{}:554/avc", peer_addr.ip())) {
-                Ok(u) => u,
-                Err(_) => return,
-            };
-
-            // We must first attempt to stream an image from the flir
-            let mut options = SessionOptions::default();
-            options = options.user_agent(String::from("demo"));
-
-            let mut session = match client::Session::describe(url, options).await {
-                Ok(s) => s,
-                Err(_) => return,
-            };
-
-            let options = SetupOptions::default();
-            if let Err(_) = session.setup(0, options).await {
-                return;
-            }
-
-            let options = PlayOptions::default();
-            let play = match session.play(options).await {
-                Ok(p) => p,
-                Err(_) => return,
-            };
-
-            let demux = match play.demuxed() {
-                Ok(d) => d,
-                Err(_) => return,
-            };
-            println!("Rtsp stream opened on {}", peer_addr);
-
-            tokio::pin!(demux);
-
-            while !tx.is_disconnected() {
-                let mut encoded_data = vec![];
-
-                let frame = demux.next().await;
-                match frame {
-                    Some(f) => {
-                        if let Ok(retina::codec::CodecItem::VideoFrame(v)) = f {
-                            encoded_data.extend_from_slice(v.data());
-                            if let Err(_) = tx.send_async(encoded_data).await {
-                                break;
-                            }
-                        }
-                    }
-                    None => {}
-                };
-            }
-            println!("Rtsp stream request closed");
-        });
-        rx
-    }
-    async fn image(&self) -> DynamicImage {
-        println!("Requesting new image from rtsp stream");
-        let mut image: Option<DynamicImage> = None;
-        let mut decoder = match Decoder::new() {
-            Ok(d) => d,
-            Err(_) => {
-                println!("Could not create decoder");
-                return DynamicImage::default();
-            }
-        };
-        let stream = self.stream();
-        while let None = image {
-            let packet = match stream.recv_async().await {
-                Ok(p) => p,
-                Err(_) => {
-                    println!("Rtsp stream early disconnect");
-                    return DynamicImage::default();
-                }
-            };
-
-            let mut nal = Vec::with_capacity(packet.len());
-            println!("Recieved nal packet");
-
-            to_bitstream_with_001_be::<u32>(&packet, &mut nal);
-
-            for nal in nal_units(&nal) {
-                if let Ok(Some(yuv)) = decoder.decode(nal) {
-                    println!("Successfully decoded image");
-                    let image_size = yuv.dimension_rgb();
-                    let mut rgb_data = vec![0; image_size.0 * image_size.1 * 3];
-                    yuv.write_rgb8(&mut rgb_data);
-                    let image_data = match ImageBuffer::from_raw(
-                        image_size.0 as u32,
-                        image_size.1 as u32,
-                        rgb_data,
-                    ) {
-                        Some(i) => i,
-                        None => return DynamicImage::default(),
-                    };
-                    image = Some(DynamicImage::ImageRgb8(image_data));
-                }
-            }
-        }
-
-        if let Some(i) = image {
-            return i;
-        } else {
-            return DynamicImage::default();
-        }
-    }
-}
-
-#[async_trait]
-impl ScannerStreamHandler for RtspSession {
-    async fn handle(self: Arc<Self>, stream: TcpStream) {
-        // We must attempt to establish an rtsp stream
-        let peer_addr = match stream.peer_addr() {
-            Ok(a) => a,
-            Err(_) => return,
-        };
-        let a50 = self.clone();
-        tokio::spawn(async move {
-            *a50.peer_addr.write().await = Some(peer_addr);
-        });
-    }
-}
-
-impl A50Link{
-    pub async fn new(com: Arc<ComEngine<AfvMessage>>) -> Arc<A50Link> {
-        let link = Arc::new(Self{
-            com: com.clone(),
-            network_stream: RwLock::new(None),
-        });
-        
-        com.add_listener(link.clone()).await;
-        link
-    }
-    pub fn new_blocking(com: Arc<ComEngine<AfvMessage>>) -> Arc<A50Link> {
-        let link = Arc::new(Self{
-            com: com.clone(),
-            network_stream: RwLock::new(None),
-        });
-        
-        com.add_listener_blocking(link.clone());
-        link
-    }
-}
-
-#[async_trait]
-impl AfvComService<AfvMessage> for A50Link{
-    async fn notify(self: Arc<Self>, _com: Arc<ComEngine<AfvMessage>>, msg: AfvMessage){
-        if let AfvMessage::FlirMsg(FlirMsg::Nal(p)) = msg{
-            if let Some(s) = &(*self.network_stream.read().await){
-                let _ = s.send_async(p).await;
-            }
-            return;
-        }
-
-        if let AfvMessage::Closed = msg{
-            *self.network_stream.write().await = None;
-        }
-    }
-}
-
-#[async_trait]
-impl IrSource for Arc<A50Link>{
-    
-    fn stream(&self) -> flume::Receiver<Vec<u8>> {
-        let (s_tx, s_rx) = flume::unbounded();
-        let (n_tx, n_rx) = flume::unbounded();
-        let link = self.clone();
-        tokio::spawn(async move {
-            {
-                *link.network_stream.write().await = Some(n_tx);
-            }
-            let _ = link.com.send(AfvMessage::FlirMsg(FlirMsg::OpenStream)).await;
-            loop {
-                let p;
-                tokio::select!{
-                    _ = sleep(LINK_IDLE_TIME) => {
-                        println!("A50 link stream timeout");
-                        break;
-                    }
-                    val = n_rx.recv_async() => {
-                        p = val;
-                    }
-                }
-
-                match p{
-                    Ok(p) => {
-                       if let Err(_) = s_tx.send_async(p).await{
-                            break;
-                        } 
-                    },
-                    Err(_) => break,
-                }
-                
-            }
-            println!("A50 link close");
-            let _ = link.com.send(AfvMessage::FlirMsg(FlirMsg::CloseStream)).await;
-            *link.network_stream.write().await = None;
-        });
-        s_rx
-    }
-    
-    async fn image(&self) -> DynamicImage {
-        println!("Requesting new image from rtsp stream");
-        let mut image: Option<DynamicImage> = None;
-        let mut decoder = match Decoder::new() {
-            Ok(d) => d,
-            Err(_) => {
-                println!("Could not create decoder");
-                return DynamicImage::default();
-            }
-        };
-        let stream = self.stream();
-        while let None = image {
-            let packet = match stream.recv_async().await {
-                Ok(p) => p,
-                Err(_) => {
-                    println!("Rtsp stream early disconnect");
-                    return DynamicImage::default();
-                }
-            };
-
-            let mut nal = Vec::with_capacity(packet.len());
-            // println!("Recieved nal packet");
-
-            to_bitstream_with_001_be::<u32>(&packet, &mut nal);
-
-            for nal in nal_units(&nal) {
-                if let Ok(Some(yuv)) = decoder.decode(nal) {
-                    println!("Successfully decoded image");
-                    let image_size = yuv.dimension_rgb();
-                    let mut rgb_data = vec![0; image_size.0 * image_size.1 * 3];
-                    yuv.write_rgb8(&mut rgb_data);
-                    let image_data = match ImageBuffer::from_raw(
-                        image_size.0 as u32,
-                        image_size.1 as u32,
-                        rgb_data,
-                    ) {
-                        Some(i) => i,
-                        None => return DynamicImage::default(),
-                    };
-                    image = Some(DynamicImage::ImageRgb8(image_data));
-                }
-            }
-        }
-
-        if let Some(i) = image {
-            return i;
-        } else {
-            return DynamicImage::default();
         }
     }
 }

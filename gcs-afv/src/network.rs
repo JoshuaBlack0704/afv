@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use bincode::ErrorKind;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::runtime::Handle;
 use tokio::{
     net::{
         tcp::{OwnedReadHalf, OwnedWriteHalf},
@@ -183,12 +184,13 @@ impl ComEngine<AfvMessage> {
                     }
                 }
             }
-
+            
             let postread_length = data.len();
             if preread_length == postread_length {
                 println!("EOF recieved");
                 break;
             }
+            
 
             let msg: AfvMessage = match bincode::deserialize(&data) {
                 Ok(a) => a,
@@ -283,10 +285,24 @@ impl<M> ComEngine<M> {
     }
 }
 
-impl<M: Serialize> ComEngine<M> {
+impl<M: Serialize + Send + Sync + 'static> ComEngine<M> {
     pub async fn send(&self, msg: M) -> Result<(), ComError> {
         let msg = match bincode::serialize(&msg) {
             Ok(d) => d,
+            Err(e) => return Err(ComError::SerializeError(e)),
+        };
+        self.send_data(&msg).await
+    }
+    pub async fn send_into(self: Arc<Self>, msg: M) -> Result<(), ComError> {
+        let msg = match bincode::serialize(&msg) {
+            Ok(d) => d,
+            Err(e) => return Err(ComError::SerializeError(e)),
+        };
+        self.send_data(&msg).await
+    }
+    pub async fn send_parallel(self: Arc<Self>, msg: M) -> Result<(), ComError>{
+        let msg = match Handle::current().spawn_blocking(move ||{bincode::serialize(&msg)}).await.expect("Could not join serialize thread"){
+            Ok(m) => m,
             Err(e) => return Err(ComError::SerializeError(e)),
         };
         self.send_data(&msg).await
@@ -306,9 +322,8 @@ impl AfvComService<AfvMessage> for NetworkLogger {
             AfvMessage::String(_) => println!("Network traffic: {:?}", msg),
             AfvMessage::FlirMsg(m) => {
                 match m{
-                    FlirMsg::OpenStream => println!("Network traffic: {:?}", m),
-                    FlirMsg::Nal(_) => println!("Network traffic: Nal Packet"),
-                    FlirMsg::CloseStream => println!("Network traffic: {:?}", m),
+                    FlirMsg::Nal(_) => {},
+                    _ => println!("Network traffic: {:?}", m)
                 }
             },
         }
