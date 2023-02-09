@@ -17,6 +17,7 @@ use tokio::{
 };
 
 use crate::afv::flir::FlirMsg;
+use crate::afv::turret::{TurretMsg};
 
 /// The port that gcs's will use to communicate on their network
 pub const GCSPORT: u16 = 60000;
@@ -30,7 +31,7 @@ pub const TIMEOUT_TIME: Duration = Duration::from_secs(5);
 /// The trait that an object must implement should it wish to listen
 /// to an ethernet bus
 #[async_trait]
-pub trait AfvComService<M>: Send + Sync {
+pub trait ComEngineService<M>: Send + Sync {
     /// This is the main bus function
     /// Upon receiving a complete msg over the network
     /// an ethernet bus will call this function in a new
@@ -53,7 +54,8 @@ pub enum AfvMessage {
     Beat,
     Closed,
     String(String),
-    FlirMsg(FlirMsg)
+    Flir(FlirMsg),
+    Turret(TurretMsg),
 }
 
 /// What went wrong while creating an ethernet bus
@@ -74,7 +76,7 @@ pub struct ComEngine<M> {
     peer_addr: SocketAddr,
     read_socket: Mutex<OwnedReadHalf>,
     write_socket: Mutex<OwnedWriteHalf>,
-    listeners: RwLock<Vec<Arc<dyn AfvComService<M>>>>,
+    listeners: RwLock<Vec<Arc<dyn ComEngineService<M>>>>,
 }
 
 impl ComEngine<AfvMessage> {
@@ -245,12 +247,12 @@ impl<M> ComEngine<M> {
         self.state.blocking_read().clone()
     }
     /// Adds a new listener to the bus
-    pub async fn add_listener(&self, listener: Arc<dyn AfvComService<M>>) {
+    pub async fn add_listener(&self, listener: Arc<dyn ComEngineService<M>>) {
         let mut listeners = self.listeners.write().await;
         listeners.push(listener);
     }
     /// Blocks while adding a new listener to the bus
-    pub fn add_listener_blocking(&self, listener: Arc<dyn AfvComService<M>>) {
+    pub fn add_listener_blocking(&self, listener: Arc<dyn ComEngineService<M>>) {
         let mut listeners = self.listeners.blocking_write();
         listeners.push(listener);
     }
@@ -313,19 +315,16 @@ impl<M: Serialize + Send + Sync + 'static> ComEngine<M> {
 pub struct NetworkLogger {}
 
 #[async_trait]
-impl AfvComService<AfvMessage> for NetworkLogger {
+impl ComEngineService<AfvMessage> for NetworkLogger {
     async fn notify(self: Arc<Self>, _com: Arc<ComEngine<AfvMessage>>, msg: AfvMessage) {
         match msg{
-            AfvMessage::Heart => println!("Network traffic: {:?}", msg),
-            AfvMessage::Beat => println!("Network traffic: {:?}", msg),
-            AfvMessage::Closed => println!("Network traffic: {:?}", msg),
-            AfvMessage::String(_) => println!("Network traffic: {:?}", msg),
-            AfvMessage::FlirMsg(m) => {
+            AfvMessage::Flir(m) => {
                 match m{
                     FlirMsg::Nal(_) => {},
                     _ => println!("Network traffic: {:?}", m)
                 }
             },
+            _ => println!("Network traffic: {:?}", msg),
         }
     }
 }

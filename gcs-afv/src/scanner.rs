@@ -4,7 +4,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use eframe::egui::{self, Ui, Layout};
+use eframe::egui::{self, Ui};
 use tokio::{
     net::TcpStream,
     runtime::Runtime,

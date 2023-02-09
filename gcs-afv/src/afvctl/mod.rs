@@ -95,11 +95,11 @@ impl AfvController {
         scanner
     }
     pub fn spawn_dummy(self: &Arc<Self>) {
-        self.rt.spawn(self.clone().dummy());
+        self.rt.spawn(self.clone().simulate_afv());
     }
-    async fn dummy(self: Arc<Self>) {
-        let afv1 = Afv::dummy(format!("127.0.0.1:{}", AFVPORT)).await;
-        let afv2 = Afv::dummy(format!("127.0.0.1:{}", AFVPORT + 1)).await;
+    async fn simulate_afv(self: Arc<Self>) {
+        let afv1 = Afv::simulated(format!("127.0.0.1:{}", AFVPORT)).await;
+        let afv2 = Afv::simulated(format!("127.0.0.1:{}", AFVPORT + 1)).await;
         *self.dummy.write().await = Some(vec![afv1, afv2]);
     }
 }

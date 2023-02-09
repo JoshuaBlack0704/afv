@@ -21,7 +21,7 @@ use url::Url;
 
 use crate::{
     gui::GuiElement,
-    network::{AfvMessage, ComEngine, AfvComService},
+    network::{AfvMessage, ComEngine, ComEngineService},
     scanner::{Scanner, ScannerStreamHandler},
 };
 
@@ -32,7 +32,8 @@ pub const FLIR_ATTEMPT_CONNECT_TIME: Duration = Duration::from_secs(3);
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum FlirMsg {
     /// Opens a stream with a specified update frequency
-    OpenStream,
+    /// false = IR stream, true = Visual stream
+    OpenStream(bool),
     #[serde(with = "serde_bytes")]
     Nal(Vec<u8>),
     CloseStream,
@@ -45,9 +46,7 @@ pub enum FlirMsg {
 /// This trait embodies what it takes to drive the underlying device
 pub trait Controller: Send + Sync{
     /// Will start a nal packet stream
-    fn stream(self: Arc<Self>) -> flume::Receiver<Vec<u8>>;
-    /// Will start a bounded nal packet stream
-    fn discard_stream(self: Arc<Self>, bound: usize) -> flume::Receiver<Vec<u8>>;
+    fn stream(self: Arc<Self>, visual: bool) -> flume::Receiver<Vec<u8>>;
 }
 
 /// Directly controls the a50
@@ -78,6 +77,7 @@ pub struct Flir{
     filter_value: RwLock<u8>,
     afv_filter: RwLock<u8>,
     show_filtered: RwLock<bool>,
+    do_filtering: RwLock<bool>,
 }
 
 impl Flir{
@@ -86,7 +86,7 @@ impl Flir{
         let flir = Arc::new(Self{
             open: RwLock::new(false),
             controller,
-            image_data: RwLock::new(DynamicImage::new_rgb8(100,100)),
+            image_data: RwLock::new(DynamicImage::new_rgb8(650,480)),
             gui_image: RwLock::new(None),
             live: RwLock::new(false),
             handle: Handle::current(),
@@ -97,6 +97,7 @@ impl Flir{
             show_filtered: Default::default(),
             com: com.clone(),
             afv_filter: Default::default(),
+            do_filtering: Default::default(),
         });
         if let Some(com) = com{
             com.add_listener(flir.clone()).await;
@@ -111,7 +112,7 @@ impl Flir{
         let flir = Arc::new(Self{
             open: RwLock::new(false),
             controller,
-            image_data: RwLock::new(DynamicImage::new_rgb8(100,100)),
+            image_data: RwLock::new(DynamicImage::new_rgb8(640,480)),
             gui_image: RwLock::new(None),
             live: RwLock::new(false),
             handle: Handle::current(),
@@ -122,6 +123,7 @@ impl Flir{
             show_filtered: Default::default(),
             com: Some(com.clone()),
             afv_filter: Default::default(),
+            do_filtering: Default::default(),
         });
         com.add_listener(flir.clone()).await;
         flir
@@ -171,9 +173,9 @@ impl Flir{
     pub fn linked_blocking(rt: Arc<Runtime>, com: Arc<ComEngine<AfvMessage>>) -> Arc<Flir> {
         rt.block_on(Self::linked(com))
     }
-    pub async fn live_feed(self: Arc<Self>){
+    pub async fn live_feed(self: Arc<Self>, visual: bool){
         *self.live.write().await = true;
-        tokio::spawn(self.feed());
+        tokio::spawn(self.feed(visual));
     }
     pub async fn stop_feed(&self){
         *self.live.write().await = false;
@@ -181,8 +183,9 @@ impl Flir{
     pub fn stop_feed_blocking(&self){
         *self.live.blocking_write() = false;
     }
-    pub async fn feed(self: Arc<Self>){
-        let stream = self.controller.clone().stream();
+    pub async fn feed(self: Arc<Self>, visual: bool){
+        let stream = self.controller.clone().stream(visual);
+        let mut successful_image = false;
         let mut decoder = match Decoder::new(){
             Ok(d) => d,
             Err(_) => return,
@@ -210,15 +213,20 @@ impl Flir{
                         Some(i) => i,
                         None => continue,
                     };
+                    successful_image = true;
                     *self.image_data.write().await = DynamicImage::ImageRgb8(image_data.clone());
                     *self.gui_image.write().await = None;
                     // self.clone().analyze_image().await;
                     let flir = self.clone();
-                    self.handle.spawn_blocking(move || {flir.clone().analyze_image()});
+                    if *self.do_filtering.read().await{
+                        self.handle.spawn_blocking(move || {flir.clone().analyze_image()});
+                    }
                 }
             }
 
-            if !*self.live.read().await{break}
+            if !*self.live.read().await && successful_image{
+                break;
+            }
         }
     }
 
@@ -247,21 +255,21 @@ impl Flir{
 }
 
 #[async_trait]
-impl AfvComService<AfvMessage> for Flir{
+impl ComEngineService<AfvMessage> for Flir{
     async fn notify(self: Arc<Self>, _com: Arc<ComEngine<AfvMessage>>, msg: AfvMessage){
-        if let AfvMessage::FlirMsg(FlirMsg::SetFilter(val)) = msg{
+        if let AfvMessage::Flir(FlirMsg::SetFilter(val)) = msg{
             *self.filter_value.write().await = val;
             return;
         }
         
-        if let AfvMessage::FlirMsg(FlirMsg::ReportFilter) = msg{
+        if let AfvMessage::Flir(FlirMsg::ReportFilter) = msg{
             if let Some(com) = &self.com{
-                let _ = com.send(AfvMessage::FlirMsg(FlirMsg::AfvFilter(*self.filter_value.read().await))).await;
+                let _ = com.send(AfvMessage::Flir(FlirMsg::AfvFilter(*self.filter_value.read().await))).await;
             }
             return;
         }
         
-        if let AfvMessage::FlirMsg(FlirMsg::AfvFilter(val)) = msg{
+        if let AfvMessage::Flir(FlirMsg::AfvFilter(val)) = msg{
             *self.afv_filter.write().await = val;
             return;
         }
@@ -283,7 +291,6 @@ impl GuiElement for Arc<Flir>{
 
     fn render(&self, ui: &mut egui::Ui) {
         ui.horizontal(|ui|{
-            let mut filter = self.show_filtered.blocking_write();
             let mut live = self.live.blocking_write();
 
             if *live{
@@ -292,25 +299,37 @@ impl GuiElement for Arc<Flir>{
                 }
             }
             else{
-                if ui.button("Start feed").clicked(){
-                    self.handle.spawn(self.clone().live_feed());
+                if ui.button("Start IR Feed").clicked(){
+                    self.handle.spawn(self.clone().live_feed(false));
+                }
+                if ui.button("Start Visual Feed").clicked(){
+                    self.handle.spawn(self.clone().live_feed(true));
+                }
+                if ui.button("Update IR Image").clicked(){
+                    self.handle.spawn(self.clone().feed(false));
+                }
+                if ui.button("Update Visual Image").clicked(){
+                    self.handle.spawn(self.clone().feed(true));
                 }
             }
-            
-            ui.toggle_value(&mut filter, "Show filtered image");
         });
         ui.horizontal(|ui|{
+            let mut filter = self.show_filtered.blocking_write();
             let mut filter_value = self.filter_value.blocking_write();
             let mut drag_value = *filter_value;
+            let mut toggle_filtering = self.do_filtering.blocking_write();
+            
+            ui.toggle_value(&mut toggle_filtering, "Toggle filtering");
             ui.label("Filter Value: ");
             let drag = egui::widgets::DragValue::new(&mut drag_value).clamp_range(0..=u8::MAX);
             ui.add(drag);
             if let Some(com) = &self.com{
                 if ui.button("Send filter value to afv").clicked(){
-                    self.handle.spawn(com.clone().send_into(AfvMessage::FlirMsg(FlirMsg::SetFilter(drag_value))));
+                    self.handle.spawn(com.clone().send_into(AfvMessage::Flir(FlirMsg::SetFilter(drag_value))));
                 }
             }
             *filter_value = drag_value;
+            ui.toggle_value(&mut filter, "Show filtered image");
             
         });
         if let Some(com) = &self.com{
@@ -318,13 +337,13 @@ impl GuiElement for Arc<Flir>{
                 let filter_value = self.afv_filter.blocking_read();
                 ui.label(format!("Afv filter Value: {}", *filter_value));
                 if ui.button("Request Afv filter value").clicked(){
-                    self.handle.spawn(com.clone().send_into(AfvMessage::FlirMsg(FlirMsg::ReportFilter)));
+                    self.handle.spawn(com.clone().send_into(AfvMessage::Flir(FlirMsg::ReportFilter)));
                 }
             });
         }
         let gui_image = self.get_gui_image(ui);
         let gui_image_size = gui_image.size_vec2();
-        let size = ui.available_size();
+        // let size = ui.available_size();
         let lower_centroid = *self.lower_centroid.blocking_read();
         let upper_centroid = *self.upper_centroid.blocking_read();
 
@@ -341,8 +360,7 @@ impl GuiElement for Arc<Flir>{
         // ui.image(gui_image.id(), ui.available_size());
         egui::widgets::plot::Plot::new("Flir plot")
             .show_background(false)
-            .width(size.x)
-            .height(size.y)
+            .data_aspect(1.0)
             .include_x(gui_image_size.x)
             .include_y(-gui_image_size.y)
             .label_formatter(|_name, value| {format!("    {:.0}, {:.0}", value.x, value.y.abs())})
@@ -407,7 +425,7 @@ impl ScannerStreamHandler for Actuator{
 }
 
 impl Controller for Actuator{
-    fn stream(self:Arc<Self>) -> flume::Receiver<Vec<u8> >  {
+    fn stream(self:Arc<Self>, visual: bool) -> flume::Receiver<Vec<u8> >  {
         let (tx, rx) = flume::unbounded();
         let a50 = self.clone();
         tokio::spawn(async move {
@@ -417,10 +435,19 @@ impl Controller for Actuator{
             };
 
             // We must attempt to establish an rtsp stream
-            let url = match Url::parse(&format!("rtsp://:@{}:554/avc", peer_addr.ip())) {
-                Ok(u) => u,
-                Err(_) => return,
-            };
+            let url;
+            if visual{
+                url = match Url::parse(&format!("rtsp://:@{}:554/avc/ch1", peer_addr.ip())) {
+                    Ok(u) => u,
+                    Err(_) => return,
+                };
+            }
+            else{
+                url = match Url::parse(&format!("rtsp://:@{}:554/avc", peer_addr.ip())) {
+                    Ok(u) => u,
+                    Err(_) => return,
+                };
+            }
 
             // We must first attempt to stream an image from the flir
             let mut options = SessionOptions::default();
@@ -470,40 +497,21 @@ impl Controller for Actuator{
         });
         rx
     }
-    fn discard_stream(self: Arc<Self>, bound: usize) -> flume::Receiver<Vec<u8>>{
-        let (tx, rx) = flume::bounded(bound);
-        let stream = self.clone().stream();
-        tokio::spawn(async move {
-            while let Ok(p) = stream.recv_async().await{
-                println!("Bounded stream testing new data");
-                match tx.try_send(p){
-                    Ok(_) => {},
-                    Err(e) => {
-                        match e{
-                            flume::TrySendError::Full(_) => continue,
-                            flume::TrySendError::Disconnected(_) => break,
-                        }
-                    },
-                }
-            }
-        });
-        rx
-    }
 }
 
 #[async_trait]
-impl AfvComService<AfvMessage> for Actuator{
+impl ComEngineService<AfvMessage> for Actuator{
     async fn notify(self: Arc<Self>, com: Arc<ComEngine<AfvMessage>>, msg: AfvMessage){
-        if let AfvMessage::FlirMsg(FlirMsg::OpenStream) = msg{
+        if let AfvMessage::Flir(FlirMsg::OpenStream(visual)) = msg{
             println!("FLIR ACTUATOR: Starting Flir network stream");
             {
                 *self.open_stream.write().await = true;
             }
-            let stream = self.clone().stream();
+            let stream = self.clone().stream(visual);
             while *self.open_stream.read().await{
                if let Ok(p) = stream.recv_async().await{
                     // tokio::spawn(com.clone().send_parallel(AfvMessage::FlirMsg(FlirMsg::Nal(p))));
-                    let _ = com.send(AfvMessage::FlirMsg(FlirMsg::Nal(p))).await;
+                    let _ = com.send(AfvMessage::Flir(FlirMsg::Nal(p))).await;
                     continue;
                 } 
                 *self.open_stream.write().await = false;
@@ -511,7 +519,7 @@ impl AfvComService<AfvMessage> for Actuator{
             println!("FLIR ACTUATOR: Stopping Flir network stream");
             return;
         }
-        if let AfvMessage::FlirMsg(FlirMsg::CloseStream) = msg{
+        if let AfvMessage::Flir(FlirMsg::CloseStream) = msg{
             *self.open_stream.write().await = false;
             return;
         }
@@ -534,13 +542,13 @@ impl Link{
 }
 
 impl Controller for Link{
-    fn stream(self:Arc<Self>) -> flume::Receiver<Vec<u8> >  {
+    fn stream(self:Arc<Self>, visual: bool) -> flume::Receiver<Vec<u8> >  {
         let (n_tx, n_rx) = flume::unbounded();
         let (s_tx, s_rx) = flume::unbounded();
         let link = self.clone();
         tokio::spawn(async move{
             println!("FLIR LINK: Attempting remote flir network stream");
-            let _ = link.com.send(AfvMessage::FlirMsg(FlirMsg::OpenStream)).await;
+            let _ = link.com.send(AfvMessage::Flir(FlirMsg::OpenStream(visual))).await;
             {
                 *self.network_channel.write().await = Some(n_tx);
             }
@@ -565,36 +573,18 @@ impl Controller for Link{
                     Err(_) => break,
                 }
             }
-            let _ = link.com.send(AfvMessage::FlirMsg(FlirMsg::CloseStream)).await;
+            let _ = link.com.send(AfvMessage::Flir(FlirMsg::CloseStream)).await;
             *link.network_channel.write().await = None;
             println!("FLIR LINK: Closed remote flir network stream");
         });
         s_rx
     }
-    fn discard_stream(self: Arc<Self>, bound: usize) -> flume::Receiver<Vec<u8>>{
-        let (tx, rx) = flume::bounded(bound);
-        let stream = self.clone().stream();
-        tokio::spawn(async move {
-            while let Ok(p) = stream.recv_async().await{
-                match tx.try_send(p){
-                    Ok(_) => todo!(),
-                    Err(e) => {
-                        match e{
-                            flume::TrySendError::Full(_) => continue,
-                            flume::TrySendError::Disconnected(_) => break,
-                        }
-                    },
-                }
-            }
-        });
-        rx
-    }
 }
 
 #[async_trait]
-impl AfvComService<AfvMessage> for Link{
+impl ComEngineService<AfvMessage> for Link{
     async fn notify(self: Arc<Self>, _com: Arc<ComEngine<AfvMessage>>, msg: AfvMessage){
-        if let AfvMessage::FlirMsg(FlirMsg::Nal(p)) = msg{
+        if let AfvMessage::Flir(FlirMsg::Nal(p)) = msg{
             if let Some(tx) = &(*self.network_channel.read().await){
                 let _ = tx.send_async(p).await;
             }
