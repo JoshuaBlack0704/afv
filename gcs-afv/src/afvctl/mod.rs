@@ -12,7 +12,7 @@ use crate::{
     afv::Afv,
     gui::GuiElement,
     network::{ComEngine, AFVPORT, NetworkLogger},
-    scanner::{Scanner, ScannerStreamHandler},
+    scanner::{Scanner, ScannerHandler},
 };
 
 pub struct AfvController {
@@ -90,8 +90,8 @@ impl AfvController {
         }
     }
     fn create_scanner(self: Arc<Self>) -> Arc<Scanner> {
-        let scanner = Scanner::new_blocking(self.rt.clone());
-        scanner.set_handler_blocking(self.rt.clone(), self);
+        let scanner = Scanner::new();
+        scanner.set_handler_blocking(self);
         scanner
     }
     pub fn spawn_dummy(self: &Arc<Self>) {
@@ -105,7 +105,7 @@ impl AfvController {
 }
 
 #[async_trait]
-impl ScannerStreamHandler for AfvController {
+impl ScannerHandler for AfvController {
     async fn handle(self: Arc<Self>, stream: TcpStream) {
         let com = ComEngine::afv_com_stream(stream);
         println!("Establishing connection with afv at {}", com.peer_addr());

@@ -22,7 +22,7 @@ use url::Url;
 use crate::{
     gui::GuiElement,
     network::{AfvMessage, ComEngine, ComEngineService},
-    scanner::{Scanner, ScannerStreamHandler},
+    scanner::{Scanner, ScannerHandler},
 };
 
 pub const RTSP_IDLE_TIME: Duration = Duration::from_secs(1);
@@ -384,13 +384,8 @@ impl Actuator{
             open_stream: RwLock::new(false),
         });
         
-        let ip = match local_ip_address::local_ip().expect("Could not get local ip addr") {
-            std::net::IpAddr::V4(i) => i,
-            std::net::IpAddr::V6(i) => i.to_ipv4_mapped().expect("Could net get ipv4 addr"),
-        };
-        println!("FLIR ACTUATOR: Looking for flir in network {}", ip);
         let subnet = Ipv4Addr::new(255, 255, 255, 0);
-        let scanner = Scanner::new_with_config(ip.into(), subnet, (554, 554), 256).await;
+        let scanner = Scanner::new();
         tokio::spawn(controller.clone().flir_repeat_connect(scanner));
         if let Some(com) = com{
             com.add_listener(controller.clone()).await;
@@ -401,7 +396,7 @@ impl Actuator{
         scanner.set_handler(self.clone()).await;
         while let None = *self.peer_addr.read().await{
             println!("Attempting Flir connection");
-            let _ = scanner.request_dispatch().await;
+            // let _ = scanner.request_dispatch().await;
             sleep(FLIR_ATTEMPT_CONNECT_TIME).await;
         }
         println!("FLIR ACTUATOR: Connected to FLIR at {:?}", *self.peer_addr.read().await);
@@ -409,7 +404,7 @@ impl Actuator{
 }
 
 #[async_trait]
-impl ScannerStreamHandler for Actuator{
+impl ScannerHandler for Actuator{
     async fn handle(self: Arc<Self>, stream: TcpStream){
         let flir = self.clone();
         
