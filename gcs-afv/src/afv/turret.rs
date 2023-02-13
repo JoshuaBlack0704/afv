@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use std::{sync::Arc, f64::consts::PI};
+use std::{sync::Arc, f64, f32};
 
 use async_trait::async_trait;
 use eframe::egui::{DragValue, plot::{Plot, Arrows}, Slider};
@@ -39,7 +39,8 @@ pub trait Controller: Send + Sync{
 
 pub struct Turret{
     open: RwLock<bool>,
-    controller: Arc<dyn Controller>,
+    pump_ctl: Arc<dyn Controller>,
+    flir_ctl: Arc<dyn Controller>,
     handle: Handle,
     com: Option<Arc<ComEngine<AfvMessage>>>,
     flir: Arc<Flir>,
@@ -63,7 +64,11 @@ pub struct Turret{
     afv_pump_state: RwLock<bool>,
 }
 
-pub struct Actuator{
+pub struct PumpActuator{
+    com: Option<Arc<ComEngine<AfvMessage>>>,
+    
+}
+pub struct FlirActuator{
     com: Option<Arc<ComEngine<AfvMessage>>>,
     
 }
@@ -94,9 +99,10 @@ pub struct Simulator{
 
 impl Turret{
     pub async fn actuated(com: Option<Arc<ComEngine<AfvMessage>>>, flir: Arc<Flir>) -> Arc<Turret> {
-        let controller = Actuator::new(None).await;
+        let pump_ctl = PumpActuator::new(com.clone()).await;
+        let flir_ctl = FlirActuator::new(com.clone()).await;
         Arc::new(Self{
-            controller,
+            pump_ctl,
             handle: Handle::current(),
             com: None,
             flir,
@@ -113,6 +119,7 @@ impl Turret{
             afv_azimuth: Default::default(),
             afv_angular_rate: Default::default(),
             afv_pump_state: Default::default(),
+            flir_ctl,
         })
         
     }
@@ -120,9 +127,10 @@ impl Turret{
         rt.block_on(Self::actuated(com, flir))
     }
     pub async fn linked(com: Arc<ComEngine<AfvMessage>>, flir: Arc<Flir>) -> Arc<Turret> {
-        let controller = Link::new(com).await;
+        let pump_ctl = Link::new(com.clone()).await;
+        let flir_ctl = Link::new(com.clone()).await;
         let turret = Arc::new(Self{
-            controller,
+            pump_ctl,
             handle: Handle::current(),
             com: None,
             flir,
@@ -139,6 +147,7 @@ impl Turret{
             afv_azimuth: Default::default(),
             afv_angular_rate: Default::default(),
             afv_pump_state: Default::default(),
+            flir_ctl,
         });
         tokio::spawn(turret.clone().data_fetch());
         turret
@@ -148,9 +157,10 @@ impl Turret{
         
     }
     pub async fn simulated(com: Option<Arc<ComEngine<AfvMessage>>>, flir: Arc<Flir>) -> Arc<Turret> {
-        let controller = Simulator::new(com.clone()).await;
+        let pump_ctl = Simulator::new(com.clone()).await;
+        let flir_ctl = Simulator::new(com.clone()).await;
         Arc::new(Self{
-            controller,
+            pump_ctl,
             handle: Handle::current(),
             com,
             flir,
@@ -167,6 +177,7 @@ impl Turret{
             afv_azimuth: Default::default(),
             afv_angular_rate: Default::default(),
             afv_pump_state: Default::default(),
+            flir_ctl,
         })
         
     }
@@ -178,10 +189,10 @@ impl Turret{
         loop{
             let sleep_time = (1.0/(*self.data_rate.read().await as f32) * 1000.0) as u64;
             sleep(tokio::time::Duration::from_millis(sleep_time)).await;
-            *self.afv_altitude.write().await = self.controller.altitude().await;
-            *self.afv_azimuth.write().await = self.controller.azimuth().await;
-            *self.afv_angular_rate.write().await = self.controller.angular_rate().await;
-            *self.afv_pump_state.write().await = self.controller.pump_state().await;
+            *self.afv_altitude.write().await = self.pump_ctl.altitude().await;
+            *self.afv_azimuth.write().await = self.pump_ctl.azimuth().await;
+            *self.afv_angular_rate.write().await = self.pump_ctl.angular_rate().await;
+            *self.afv_pump_state.write().await = self.pump_ctl.pump_state().await;
         }
     }
 }
@@ -207,7 +218,7 @@ impl GuiElement for Turret{
             // Top Right
             ui.allocate_ui(size/2.1, |ui|{
 
-                let azimuth = *self.afv_azimuth.blocking_read() as f64 + PI/2.0;
+                let azimuth = *self.afv_azimuth.blocking_read() as f64 + f64::consts::PI/2.0;
 
                 let origin = [0.0,0.0];
                 let target = [azimuth.cos() * 1.0, azimuth.sin() * 1.0];
@@ -258,9 +269,9 @@ impl GuiElement for Turret{
                             let altitude = *self.altitude.blocking_read() as f32 * 3.14/180.0;
                             let azimuth = *self.azimuth.blocking_read() as f32 * 3.14/180.0;
                             let angular_rate = *self.angular_rate.blocking_read() as f32 * 3.14/180.0;
-                            self.handle.block_on(self.controller.set_altitude(altitude));
-                            self.handle.block_on(self.controller.set_azimuth(azimuth));
-                            self.handle.block_on(self.controller.set_angular_rate(angular_rate));
+                            self.handle.block_on(self.pump_ctl.set_altitude(altitude));
+                            self.handle.block_on(self.pump_ctl.set_azimuth(azimuth));
+                            self.handle.block_on(self.pump_ctl.set_angular_rate(angular_rate));
                         }
                     }
                     if !*self.auto_pump.blocking_read(){
@@ -316,7 +327,7 @@ impl GuiElement for Turret{
 }
 
 
-impl Actuator{
+impl PumpActuator{
     pub async fn new(com: Option<Arc<ComEngine<AfvMessage>>>) -> Arc<Self> {
         println!("Turret control established");
         Arc::new(Self{
@@ -326,8 +337,9 @@ impl Actuator{
 }
 
 
+
 #[async_trait]
-impl Controller for Actuator{
+impl Controller for PumpActuator{
     async fn altitude(&self) -> f32 {
         todo!()
     }
@@ -362,6 +374,53 @@ impl Controller for Actuator{
 
     async fn refresh_autotarget(&self) {
         todo!()
+    }
+}
+
+#[async_trait]
+impl Controller for FlirActuator{
+    async fn altitude(&self) -> f32 {
+        todo!()
+    }
+
+    async fn azimuth(&self) -> f32 {
+        todo!()
+    }
+
+    async fn angular_rate(&self) -> f32 {
+        todo!()
+    }
+
+    async fn pump_state(&self) -> bool{
+        todo!()
+    }
+
+    async fn set_altitude(&self, altitude: f32) {
+        todo!()
+    }
+
+    async fn set_azimuth(&self, azimuth: f32) {
+        todo!()
+    }
+
+    async fn set_angular_rate(&self, rate: f32) {
+        todo!()
+    }
+
+    async fn set_pump_state(&self, state: bool) {
+        todo!()
+    }
+
+    async fn refresh_autotarget(&self) {
+        todo!()
+    }
+}
+impl FlirActuator{
+    pub async fn new(com: Option<Arc<ComEngine<AfvMessage>>>) -> Arc<Self> {
+        println!("Turret control established");
+        Arc::new(Self{
+            com,
+        })
     }
 }
 
@@ -474,7 +533,7 @@ impl Simulator{
             let mut azimuth = self.azimuth.write().await;
             let dif = tgt_azimuth - *azimuth;
 
-            if dif > angular_dist{
+            if dif.abs() > angular_dist.abs(){
                 *azimuth += angular_dist * dif.signum();
             }
             else{

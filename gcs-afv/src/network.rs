@@ -324,6 +324,9 @@ impl ComEngineService<AfvMessage> for NetworkLogger {
                     _ => println!("Network traffic: {:?}", m)
                 }
             },
+            AfvMessage::Turret(m) => {
+                
+            }
             _ => println!("Network traffic: {:?}", msg),
         }
     }
