@@ -383,20 +383,19 @@ impl Actuator{
             peer_addr: RwLock::new(None),
             open_stream: RwLock::new(false),
         });
-        
-        let subnet = Ipv4Addr::new(255, 255, 255, 0);
-        let scanner = Scanner::new();
-        tokio::spawn(controller.clone().flir_repeat_connect(scanner));
+        tokio::spawn(controller.clone().flir_repeat_connect());
         if let Some(com) = com{
             com.add_listener(controller.clone()).await;
         }
         controller
     }
-    async fn flir_repeat_connect(self: Arc<Self>, scanner: Arc<Scanner>){
+    async fn flir_repeat_connect(self: Arc<Self>){
+        let scanner = Scanner::new(None).await;
+        scanner.add_port(554).await;
         scanner.set_handler(self.clone()).await;
         while let None = *self.peer_addr.read().await{
             println!("Attempting Flir connection");
-            // let _ = scanner.request_dispatch().await;
+            scanner.clone().dispatch_all_interfaces();
             sleep(FLIR_ATTEMPT_CONNECT_TIME).await;
         }
         println!("FLIR ACTUATOR: Connected to FLIR at {:?}", *self.peer_addr.read().await);

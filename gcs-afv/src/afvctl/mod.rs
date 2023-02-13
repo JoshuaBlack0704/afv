@@ -18,7 +18,7 @@ use crate::{
 pub struct AfvController {
     rt: Arc<Runtime>,
     open: RwLock<bool>,
-    scanner: Mutex<Option<Arc<Scanner>>>,
+    scanner: Mutex<Arc<Scanner>>,
     afv_links: RwLock<Vec<Arc<Afv>>>,
     dummy: RwLock<Option<Vec<Arc<Afv>>>>,
 }
@@ -34,13 +34,19 @@ impl AfvController {
                     .expect("Could not build runtime"),
             ),
         };
-        Arc::new(Self {
+
+        let scanner = Scanner::new_blocking(rt.clone(), None);
+        
+        let ctl = Arc::new(Self {
             open: RwLock::new(false),
-            scanner: Mutex::new(None),
+            scanner: Mutex::new(scanner.clone()),
             afv_links: RwLock::new(vec![]),
             rt,
             dummy: RwLock::new(None),
-        })
+        });
+        scanner.set_handler_blocking(ctl.clone());
+        scanner.add_port_blocking(AFVPORT);
+        ctl
     }
     fn side_panel(self: &Arc<Self>, ui: &mut Ui) {
         egui::SidePanel::left("Conroller Contents")
@@ -74,8 +80,7 @@ impl AfvController {
         });
     }
     fn scanner_ui(self: &Arc<Self>, ui: &mut Ui) {
-        let mut scanner_lock = self.scanner.blocking_lock();
-        let scanner = scanner_lock.get_or_insert(self.clone().create_scanner());
+        let scanner = self.scanner.blocking_lock();
         let mut open = scanner.open();
         ui.toggle_value(&mut open, "Open Scanner");
         if *open {
@@ -88,11 +93,6 @@ impl AfvController {
                     scanner.render(ui);
                 });
         }
-    }
-    fn create_scanner(self: Arc<Self>) -> Arc<Scanner> {
-        let scanner = Scanner::new();
-        scanner.set_handler_blocking(self);
-        scanner
     }
     pub fn spawn_dummy(self: &Arc<Self>) {
         self.rt.spawn(self.clone().simulate_afv());
