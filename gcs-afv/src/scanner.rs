@@ -78,7 +78,6 @@ impl Scanner{
         let mut ports = self.ports.blocking_write();
 
         if !ports.contains(&port){
-            println!("Here");
             ports.push(port);
         }
     }

@@ -5,7 +5,7 @@ use tokio::{net::ToSocketAddrs, sync::RwLock};
 
 use crate::{network::{ComEngine, AfvMessage, NetworkLogger}, gui::GuiElement};
 
-use self::{flir::Flir, turret::Turret};
+use self::{flir::Flir, turretv2::Turret2};
 
 pub mod flir;
 pub mod turret;
@@ -22,19 +22,19 @@ pub struct Afv{
     open: RwLock<bool>,
     com: Arc<ComEngine<AfvMessage>>,
     gui_system: RwLock<GuiSystem>,
-    a50: Arc<Flir>,
-    turret: Arc<Turret>,
+    top_flir: Arc<Flir>,
+    turret: Arc<Turret2>,
 }
 
 impl Afv{
     pub async fn new(com: Arc<ComEngine<AfvMessage>>) -> Arc<Self> {
-        let a50 = Flir::actuated(Some(com.clone())).await;
-        let turret = Turret::actuated(Some(com.clone()), a50.clone()).await;
+        let top_flir = Flir::actuated(Some(com.clone())).await;
+        let turret = Turret2::simulated(Some(com.clone()), top_flir.clone()).await;
         NetworkLogger::afv_com_monitor(&com).await;
         Arc::new(
             Self{
                 com,
-                a50,
+                top_flir,
                 open: RwLock::new(false),
                 gui_system: RwLock::new(GuiSystem::Flir),
                 turret,
@@ -42,13 +42,13 @@ impl Afv{
         )
     }
     pub async fn link(com: Arc<ComEngine<AfvMessage>>) -> Arc<Afv>{
-        let a50 = Flir::linked(com.clone()).await;
-        let turret = Turret::linked(com.clone(), a50.clone()).await;
+        let top_flir = Flir::linked(com.clone()).await;
+        let turret = Turret2::linked(com.clone(), top_flir.clone()).await;
         // NetworkLogger::afv_com_monitor(&com).await;
         Arc::new(
             Self{
                 com,
-                a50,
+                top_flir,
                 open: RwLock::new(false),
                 gui_system: RwLock::new(GuiSystem::Flir),
                 turret,
@@ -58,12 +58,12 @@ impl Afv{
 
     pub async fn simulated(addr: impl ToSocketAddrs) -> Arc<Afv> {
         let com = ComEngine::afv_com_listen(addr).await.expect("Dummy afv could not establish connection");
-        let a50 = Flir::actuated(Some(com.clone())).await;
-        let turret = Turret::simulated(Some(com.clone()), a50.clone()).await;
+        let top_flir = Flir::actuated(Some(com.clone())).await;
+        let turret = Turret2::simulated(Some(com.clone()), top_flir.clone()).await;
         NetworkLogger::afv_com_monitor(&com).await;
         Arc::new(Self{
             com,
-            a50,
+            top_flir,
             open: RwLock::new(false),
             gui_system: RwLock::new(GuiSystem::Flir),
             turret,
@@ -73,7 +73,7 @@ impl Afv{
 
 impl GuiElement for Afv{
     fn open(&self) -> tokio::sync::RwLockWriteGuard<bool> {
-        self.a50.open()
+        self.top_flir.open()
     }
 
     fn name(&self) -> String {
@@ -92,7 +92,7 @@ impl GuiElement for Afv{
         ui.separator();
         match *selected{
             GuiSystem::Flir => {
-                self.a50.clone().render(ui);
+                self.top_flir.clone().render(ui);
             },
             GuiSystem::Turret => {
                 self.turret.clone().render(ui);
