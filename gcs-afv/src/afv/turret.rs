@@ -206,7 +206,7 @@ impl GuiElement for Turret{
         "Turret Control".into()
     }
 
-    fn render(&self, ui: &mut eframe::egui::Ui) {
+    fn render(self: Arc<Self>, ui: &mut eframe::egui::Ui) {
         let flir_image = self.flir.get_gui_image(ui);
         let size = ui.available_size();
         ui.horizontal_wrapped(|ui|{

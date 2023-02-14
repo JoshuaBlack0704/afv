@@ -73,7 +73,7 @@ impl AfvController {
         egui::CentralPanel::default().show_inside(ui, |ui|{
             for afv in links.iter(){
                 if *afv.open(){
-                    afv.render(ui);
+                    afv.clone().render(ui);
                     break;
                 }
             }
@@ -90,7 +90,7 @@ impl AfvController {
                 .vscroll(true)
                 .open(&mut open)
                 .show(ui.ctx(), |ui| {
-                    scanner.render(ui);
+                    scanner.clone().render(ui);
                 });
         }
     }
@@ -114,7 +114,7 @@ impl ScannerHandler for AfvController {
     }
 }
 
-impl GuiElement for Arc<AfvController> {
+impl GuiElement for AfvController {
     fn open(&self) -> tokio::sync::RwLockWriteGuard<bool> {
         self.open.blocking_write()
     }
@@ -123,7 +123,7 @@ impl GuiElement for Arc<AfvController> {
         "Afv Controller".into()
     }
 
-    fn render(&self, ui: &mut eframe::egui::Ui) {
+    fn render(self: Arc<Self>, ui: &mut eframe::egui::Ui) {
         self.side_panel(ui);
         self.central_panel(ui);
     }

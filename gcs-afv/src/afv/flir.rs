@@ -1,5 +1,5 @@
 use std::{
-    net::{Ipv4Addr, SocketAddr},
+    net::SocketAddr,
     sync::Arc,
 };
 
@@ -276,7 +276,7 @@ impl ComEngineService<AfvMessage> for Flir{
     }
 }
 
-impl GuiElement for Arc<Flir>{
+impl GuiElement for Flir{
     fn open(&self) -> tokio::sync::RwLockWriteGuard<bool> {
         let open = self.open.blocking_write();
         if !*open{
@@ -289,7 +289,7 @@ impl GuiElement for Arc<Flir>{
         "Flir".into()
     }
 
-    fn render(&self, ui: &mut egui::Ui) {
+    fn render(self: Arc<Self>, ui: &mut egui::Ui) {
         ui.horizontal(|ui|{
             let mut live = self.live.blocking_write();
 

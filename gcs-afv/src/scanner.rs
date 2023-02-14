@@ -271,7 +271,7 @@ impl Scanner{
     }
 }
 
-impl GuiElement for Arc<Scanner>{
+impl GuiElement for Scanner{
     fn open(&self) -> tokio::sync::RwLockWriteGuard<bool> {
         self.open.blocking_write()
     }
@@ -280,7 +280,7 @@ impl GuiElement for Arc<Scanner>{
         "Scanner".into()
     }
 
-    fn render(&self, ui: &mut eframe::egui::Ui) {
+    fn render(self: Arc<Self>, ui: &mut eframe::egui::Ui) {
         let state = *self.state.blocking_read();
         match state{
             State::Selection => self.selection_ui(ui),

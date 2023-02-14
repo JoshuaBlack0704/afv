@@ -9,6 +9,7 @@ use self::{flir::Flir, turret::Turret};
 
 pub mod flir;
 pub mod turret;
+pub mod turretv2;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum GuiSystem{
@@ -70,7 +71,7 @@ impl Afv{
     }
 }
 
-impl GuiElement for Arc<Afv>{
+impl GuiElement for Afv{
     fn open(&self) -> tokio::sync::RwLockWriteGuard<bool> {
         self.a50.open()
     }
@@ -79,7 +80,7 @@ impl GuiElement for Arc<Afv>{
         "Afv".into()
     }
 
-    fn render(&self, ui: &mut eframe::egui::Ui) {
+    fn render(self: Arc<Self>, ui: &mut eframe::egui::Ui) {
         let mut selected = self.gui_system.blocking_write();
         ComboBox::from_label("Available Systems")
             .selected_text(format!("{:?}", *selected))
@@ -91,10 +92,10 @@ impl GuiElement for Arc<Afv>{
         ui.separator();
         match *selected{
             GuiSystem::Flir => {
-                self.a50.render(ui);
+                self.a50.clone().render(ui);
             },
             GuiSystem::Turret => {
-                self.turret.render(ui);
+                self.turret.clone().render(ui);
             },
         }
     }
