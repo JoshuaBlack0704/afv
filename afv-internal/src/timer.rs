@@ -69,6 +69,24 @@ impl Timer1{
     pub fn stop(&self){
         self.timer.tccr1b.modify(|_,w| w.cs1().no_clock());
     }
+    pub fn set_int_compa(&self){
+        self.timer.timsk1.modify(|_,w| w.ocie1a().set_bit());
+    }
+    pub fn clear_int_compa(&self){
+        self.timer.timsk1.modify(|_,w| w.ocie1a().clear_bit());
+    }
+    pub fn set_int_compb(&self){
+        self.timer.timsk1.modify(|_,w| w.ocie1b().set_bit());
+    }
+    pub fn clear_int_compb(&self){
+        self.timer.timsk1.modify(|_,w| w.ocie1b().clear_bit());
+    }
+    pub fn set_int_capt(&self){
+        self.timer.timsk1.modify(|_,w| w.icie1().set_bit());
+    }
+    pub fn clear_int_capt(&self){
+        self.timer.timsk1.modify(|_,w| w.icie1().clear_bit());
+    }
     pub fn dissolve(self) -> TC1 {
         self.stop();
         self.timer

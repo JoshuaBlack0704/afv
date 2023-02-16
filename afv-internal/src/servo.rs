@@ -9,20 +9,31 @@ pub struct Servo{
 }
 
 impl Servo{
-    pub fn new(use_pb1: bool, use_pb2: bool, timer: TC1) -> Servo {
+    pub fn new(use_pb1: bool, use_pb2: bool, int_compa: bool, int_compb: bool, int_capt: bool, timer: TC1) -> Servo {
         let timer = Timer1::new(timer, Waveform::FOURTEEN);
         // Set our pwm freqency to 50hz
         timer.load_icr1(COUNTER_VALUE);
         // Set out pin outputs
         if use_pb1{
             timer.set_coma(ComMode::FASTPWMNONINV);
-            // Set out duty cycles to 50% (1.5ms)
-            timer.load_ocr1a(23);
         }
         if use_pb2{
             timer.set_comb(ComMode::FASTPWMNONINV);
-            // Set out duty cycles to 50% (1.5ms)
-            timer.load_ocr1b(23);
+        }
+        
+        // Set out duty cycles to 50% (1.5ms)
+        timer.load_ocr1a(23);
+        // Set out duty cycles to 50% (1.5ms)
+        timer.load_ocr1b(23);
+        
+        if int_compa{
+            timer.set_int_compa();
+        }
+        if int_compb{
+            timer.set_int_compb();
+        }
+        if int_capt{
+            timer.set_int_capt();
         }
         // Start timer
         timer.set_clock(Clock::PRESCALE64);
