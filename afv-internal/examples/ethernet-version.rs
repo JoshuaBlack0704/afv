@@ -2,7 +2,7 @@
 #![no_main]
 #![feature(abi_avr_interrupt)]
 
-use afv_internal::w5500::W5500;
+use afv_internal::w5500::{W5500, socket_register::{SocketN, SocketStatus}};
 use arduino_hal::Spi;
 use embedded_hal::spi::{Polarity, Phase};
 use panic_halt as _;
@@ -56,6 +56,17 @@ fn main() -> ! {
     arduino_hal::delay_us(10);
     let rcr = common_block.read_retry_count(&mut spi, &mut cs);
     let _ = ufmt::uwriteln!(&mut serial, "W5500 Retry Count: {:?}", rcr);
+
+    let socket0 = W5500::socket_n(SocketN::SOCKET0);
+    let mut sock_status = SocketStatus::Init;
+    sock_status = socket0.read_status(&mut spi, &mut cs);
+    let _ = ufmt::uwriteln!(&mut serial, "Socket 0 Status : {:?}", sock_status);
+    socket0.write_src_port(4040u16, &mut spi, &mut cs);
+    arduino_hal::delay_us(10);
+    let port = socket0.read_src_port(&mut spi, &mut cs);
+    let _ = ufmt::uwriteln!(&mut serial, "Socket 0 Port : {:?}", port);
+    
+    
     
     
 

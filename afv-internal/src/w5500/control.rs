@@ -1,3 +1,4 @@
+#[derive(Clone, Copy)]
 pub struct Bsb(u8);
 impl From<Bsb> for u8{
     fn from(bsb: Bsb) -> Self {
