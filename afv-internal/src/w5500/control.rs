@@ -1,4 +1,5 @@
-#[derive(Clone, Copy)]
+use ufmt::derive::uDebug;
+#[derive(Clone, Copy, Debug, uDebug)]
 pub struct Bsb(u8);
 impl From<Bsb> for u8{
     fn from(bsb: Bsb) -> Self {

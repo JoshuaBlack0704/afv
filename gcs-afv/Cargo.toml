@@ -26,3 +26,5 @@ serde_bytes = "0.11.9"
 clap = { version = "4.1.4", features = ["derive"] }
 ipnet = "2.7.1"
 default-net = "0.12.0"
+serde-json-core = "0.5.0"
+afv-internal = {path = "../afv-internal"}

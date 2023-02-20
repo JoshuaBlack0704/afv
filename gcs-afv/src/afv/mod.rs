@@ -5,11 +5,11 @@ use tokio::{net::ToSocketAddrs, sync::RwLock};
 
 use crate::{network::{ComEngine, AfvMessage, NetworkLogger}, gui::GuiElement};
 
-use self::{flir::Flir, turretv2::Turret2};
+use self::{flir::Flir, turret::Turret, mainctl::MainCtl};
 
 pub mod flir;
 pub mod turret;
-pub mod turretv2;
+pub mod mainctl;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum GuiSystem{
@@ -23,13 +23,15 @@ pub struct Afv{
     com: Arc<ComEngine<AfvMessage>>,
     gui_system: RwLock<GuiSystem>,
     top_flir: Arc<Flir>,
-    turret: Arc<Turret2>,
+    turret: Arc<Turret>,
+    mainctl: Arc<MainCtl>,
 }
 
 impl Afv{
-    pub async fn new(com: Arc<ComEngine<AfvMessage>>) -> Arc<Self> {
+    pub async fn actuated(com: Arc<ComEngine<AfvMessage>>) -> Arc<Self> {
         let top_flir = Flir::actuated(Some(com.clone())).await;
-        let turret = Turret2::simulated(Some(com.clone()), top_flir.clone()).await;
+        let turret = Turret::simulated(Some(com.clone()), top_flir.clone()).await;
+        let mainctl = MainCtl::actuated(Some(com.clone())).await;
         NetworkLogger::afv_com_monitor(&com).await;
         Arc::new(
             Self{
@@ -38,12 +40,14 @@ impl Afv{
                 open: RwLock::new(false),
                 gui_system: RwLock::new(GuiSystem::Flir),
                 turret,
+                mainctl,
             }
         )
     }
     pub async fn link(com: Arc<ComEngine<AfvMessage>>) -> Arc<Afv>{
         let top_flir = Flir::linked(com.clone()).await;
-        let turret = Turret2::linked(com.clone(), top_flir.clone()).await;
+        let turret = Turret::linked(com.clone(), top_flir.clone()).await;
+        let mainctl = MainCtl::linked(com.clone()).await;
         // NetworkLogger::afv_com_monitor(&com).await;
         Arc::new(
             Self{
@@ -52,6 +56,7 @@ impl Afv{
                 open: RwLock::new(false),
                 gui_system: RwLock::new(GuiSystem::Flir),
                 turret,
+                mainctl,
             }
         )
     }
@@ -59,7 +64,9 @@ impl Afv{
     pub async fn simulated(addr: impl ToSocketAddrs) -> Arc<Afv> {
         let com = ComEngine::afv_com_listen(addr).await.expect("Dummy afv could not establish connection");
         let top_flir = Flir::actuated(Some(com.clone())).await;
-        let turret = Turret2::simulated(Some(com.clone()), top_flir.clone()).await;
+        let turret = Turret::simulated(Some(com.clone()), top_flir.clone()).await;
+        // let mainctl = MainCtl::simulated(Some(com.clone())).await;
+        let mainctl = MainCtl::actuated(Some(com.clone())).await;
         NetworkLogger::afv_com_monitor(&com).await;
         Arc::new(Self{
             com,
@@ -67,6 +74,7 @@ impl Afv{
             open: RwLock::new(false),
             gui_system: RwLock::new(GuiSystem::Flir),
             turret,
+            mainctl,
         })
     }
 }

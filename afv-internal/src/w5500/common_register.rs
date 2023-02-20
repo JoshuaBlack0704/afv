@@ -71,32 +71,109 @@ impl ModeRegister{
     pub const PPPOE: Self = Self(0b00001000);
     pub const FARP:  Self = Self(0b00000010);
 }
+impl Default for ModeRegister{
+    fn default() -> Self {
+        Self(0)
+    }
+}
 
-pub struct PhyCfgRegister(u8);
+pub struct PhyCfgRegister{
+    reg: u8
+}
 impl From<PhyCfgRegister> for u8{
     fn from(phy: PhyCfgRegister) -> Self {
-        phy.0
+        phy.reg
+    }
+}
+impl From<u8> for PhyCfgRegister{
+    fn from(reg: u8) -> Self {
+        Self{reg}
     }
 }
 impl PhyCfgRegister{
-    /// To reset use &
-    pub const RST:         Self = Self(0b0_0_000_000);
-    pub const OPMD_OPMDC:  Self = Self(0b1_1_000_000);
-    pub const OPMD_HW:     Self = Self(0b1_0_000_000);
-    pub const BT10_HD:     Self = Self(0b1_0_000_000);
-    pub const BT10_FD:     Self = Self(0b1_0_001_000);
-    pub const BT100_HD:    Self = Self(0b1_0_010_000);
-    pub const BT100_FD:    Self = Self(0b1_0_011_000);
-    pub const BT100_HD_AN: Self = Self(0b1_0_100_000);
-    pub const NOT_UNSED:   Self = Self(0b1_0_101_000);
-    pub const PWR_DOWN:    Self = Self(0b1_0_110_000);
-    pub const ALL_AN:      Self = Self(0b1_0_111_000);
-    pub const FULL_DUPLEX: Self = Self(0b1_0_000_100);
-    pub const HALF_DUPLEX: Self = Self(0b1_0_000_000);
-    pub const HIGH_SPEED:  Self = Self(0b1_0_000_010);
-    pub const LOW_SPEED:   Self = Self(0b1_0_000_000);
-    pub const LINK_UP:     Self = Self(0b1_0_000_001);
-    pub const LINK_DOWN:   Self = Self(0b1_0_000_000);
+    pub fn enable_reset(mut self) -> Self{
+        self.reg &= 0b00000000;
+        self.reg |= 0b10000000;
+        self
+    }
+    pub fn set_hw_opmd(mut self) -> Self{
+        self.reg &= 0b10111111;
+        self.reg |= 0b00000000;
+        self
+    }
+    pub fn set_software_opmd(mut self) -> Self{
+        self.reg &= 0b10111111;
+        self.reg |= 0b01000000;
+        self
+    }
+    pub fn set_10bt_hd(mut self) -> Self{
+        self.reg &= 0b11000111;
+        self.reg |= 0b00000000;
+        self
+    }
+    pub fn set_10bt_fd(mut self) -> Self{
+        self.reg &= 0b11000111;
+        self.reg |= 0b00001000;
+        self
+    }
+    pub fn set_100bt_hd(mut self) -> Self{
+        self.reg &= 0b11000111;
+        self.reg |= 0b00010000;
+        self
+    }
+    pub fn set_100bt_fd(mut self) -> Self{
+        self.reg &= 0b11000111;
+        self.reg |= 0b00011000;
+        self
+    }
+    pub fn set_100bt_fd_full(mut self) -> Self{
+        self.reg &= 0b11000111;
+        self.reg |= 0b00100000;
+        self
+    }
+    pub fn set_not_used(mut self) -> Self{
+        self.reg &= 0b11000111;
+        self.reg |= 0b00101000;
+        self
+    }
+    pub fn set_pwr_down(mut self) -> Self{
+        self.reg &= 0b11000111;
+        self.reg |= 0b00110000;
+        self
+    }
+    pub fn set_all_capable(mut self) -> Self{
+        self.reg &= 0b11000111;
+        self.reg |= 0b00111000;
+        self
+    }
+    pub fn is_full_duplex(&self) -> bool{
+        self.reg & 0b00000100 == 0b00000100
+    }
+    pub fn is_half_duplex(&self) -> bool{
+        if !self.is_full_duplex(){
+            return true
+        }
+        false
+    }
+    pub fn is_100mpbs(&self) -> bool{
+        self.reg & 0b00000010 == 0b00000010
+    }
+    pub fn is_10mbps(&self) -> bool{
+        if !self.is_100mpbs(){
+            return true
+        }
+        false
+    }
+    pub fn link_status(&self) -> bool {
+        self.reg & 0b00000001 == 0b00000001
+    }
+}
+impl Default for PhyCfgRegister{
+    fn default() -> Self {
+        Self{
+            reg: 0b10000000,
+        }
+    }
 }
 
 pub struct CommonBlock{}
@@ -109,77 +186,94 @@ impl W5500{
 
 impl CommonBlock{
     pub fn read_version_register(&self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> u8{
+        arduino_hal::delay_us(1);
         let header = header(CommonAddress::VERSION, ControlByte::new(COMMON_BLOCK, Rw::READ, Om::VDM));
         read::<VERSION_SIZE>(header, spi, cs)[0]
     }
     pub fn read_mode_register(&self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> u8 {
+        arduino_hal::delay_us(1);
         let header = header(CommonAddress::MODE, ControlByte::new(COMMON_BLOCK, Rw::READ, Om::VDM));
         read::<MODE_SIZE>(header, spi, cs)[0]
     }
     pub fn write_mode_register(&self, mode: ModeRegister, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) {
+        arduino_hal::delay_us(1);
         let header = header(CommonAddress::MODE, ControlByte::new(COMMON_BLOCK, Rw::WRITE, Om::VDM));
         let mode = [mode.into()];
         write(header, &mode, spi, cs);
     }
     pub fn read_gateway_addr(&self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> [u8; GATEWAY_SIZE] {
+        arduino_hal::delay_us(1);
         let header = header(CommonAddress::GATEWAY, ControlByte::new(COMMON_BLOCK, Rw::READ, Om::VDM));
         read::<GATEWAY_SIZE>(header, spi, cs)
     }
     pub fn write_gateway_addr(&self, gateway: impl Into<[u8;GATEWAY_SIZE]>, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) {
+        arduino_hal::delay_us(1);
         let header = header(CommonAddress::GATEWAY, ControlByte::new(COMMON_BLOCK, Rw::WRITE, Om::VDM));
         let gateway = gateway.into();
         write(header, &gateway, spi, cs);
     }
     pub fn read_subnet(&self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> [u8; SUBNET_MASK_SIZE] {
+        arduino_hal::delay_us(1);
         let header = header(CommonAddress::SUBNET_MASK, ControlByte::new(COMMON_BLOCK, Rw::READ, Om::VDM));
         read::<SUBNET_MASK_SIZE>(header, spi, cs)
     }
     pub fn write_subnet(&self, subnet: impl Into<[u8;SUBNET_MASK_SIZE]>, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) {
+        arduino_hal::delay_us(1);
         let header = header(CommonAddress::SUBNET_MASK, ControlByte::new(COMMON_BLOCK, Rw::WRITE, Om::VDM));
         let subnet = subnet.into();
         write(header, &subnet, spi, cs);
     }
     pub fn read_mac(&self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> [u8; SOURCE_MAC_SIZE] {
+        arduino_hal::delay_us(1);
         let header = header(CommonAddress::SOURCE_MAC, ControlByte::new(COMMON_BLOCK, Rw::READ, Om::VDM));
         read::<SOURCE_MAC_SIZE>(header, spi, cs)
     }
     pub fn write_mac(&self, mac: impl Into<[u8;SOURCE_MAC_SIZE]>, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) {
+        arduino_hal::delay_us(1);
         let header = header(CommonAddress::SOURCE_MAC, ControlByte::new(COMMON_BLOCK, Rw::WRITE, Om::VDM));
         let mac = mac.into();
         write(header, &mac, spi, cs);
     }
     pub fn read_ip(&self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> [u8; SOURCE_IP_SIZE] {
+        arduino_hal::delay_us(1);
         let header = header(CommonAddress::SOURCE_IP, ControlByte::new(COMMON_BLOCK, Rw::READ, Om::VDM));
         read::<SOURCE_IP_SIZE>(header, spi, cs)
     }
     pub fn write_ip(&self, ip: impl Into<[u8;SOURCE_IP_SIZE]>, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) {
+        arduino_hal::delay_us(1);
         let header = header(CommonAddress::SOURCE_IP, ControlByte::new(COMMON_BLOCK, Rw::WRITE, Om::VDM));
         let ip = ip.into();
         write(header, &ip, spi, cs);
     }
     pub fn read_retry_time(&self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> u16 {
+        arduino_hal::delay_us(1);
         let header = header(CommonAddress::RETRY_TIME, ControlByte::new(COMMON_BLOCK, Rw::READ, Om::VDM));
         u16::from_be_bytes(read::<RETRY_TIME_SIZE>(header, spi, cs))
     }
     pub fn write_retry_time(&self, retry_time: impl Into<[u8;RETRY_TIME_SIZE]>, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) {
+        arduino_hal::delay_us(1);
         let header = header(CommonAddress::RETRY_TIME, ControlByte::new(COMMON_BLOCK, Rw::WRITE, Om::VDM));
         let rtr = retry_time.into();
         write(header, &rtr, spi, cs);
     }
     pub fn read_retry_count(&self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> u8 {
+        arduino_hal::delay_us(1);
         let header = header(CommonAddress::RETRY_COUNT, ControlByte::new(COMMON_BLOCK, Rw::READ, Om::VDM));
         read::<RETRY_COUNT_SIZE>(header, spi, cs)[0]
     }
     pub fn write_retry_count(&self, retry_count: impl Into<u8>, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) {
+        arduino_hal::delay_us(1);
         let header = header(CommonAddress::RETRY_COUNT, ControlByte::new(COMMON_BLOCK, Rw::WRITE, Om::VDM));
         let rcr = [retry_count.into()];
         write(header, &rcr, spi, cs);
     }
-    pub fn read_phy_cfg(&self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> u8{
+    pub fn read_phy_cfg(&self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> PhyCfgRegister{
+        arduino_hal::delay_us(1);
         let header = header(CommonAddress::PHY_CFG, ControlByte::new(COMMON_BLOCK, Rw::READ, Om::VDM));
-        read::<PHY_CFG_SIZE>(header, spi, cs)[0]
+        PhyCfgRegister::from(read::<PHY_CFG_SIZE>(header, spi, cs)[0])
     }
     pub fn write_phy_cfg(&self, phy_cfg: PhyCfgRegister, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) {
+        arduino_hal::delay_us(1);
         let header = header(CommonAddress::RETRY_COUNT, ControlByte::new(COMMON_BLOCK, Rw::WRITE, Om::VDM));
         let guard:u8 = 0b11111000;
         let phy:u8 = phy_cfg.into();

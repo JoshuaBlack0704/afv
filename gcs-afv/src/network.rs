@@ -17,8 +17,8 @@ use tokio::{
 };
 
 use crate::afv::flir::FlirMsg;
+use crate::afv::mainctl::MainCtlMsg;
 use crate::afv::turret::TurretMsg;
-use crate::afv::turretv2::Turret2Msg;
 
 /// The port that gcs's will use to communicate on their network
 pub const GCSPORT: u16 = 60000;
@@ -57,7 +57,7 @@ pub enum AfvMessage {
     String(String),
     Flir(FlirMsg),
     Turret(TurretMsg),
-    Turret2(Turret2Msg),
+    MainCtl(MainCtlMsg),
 }
 
 /// What went wrong while creating an ethernet bus
@@ -327,9 +327,6 @@ impl ComEngineService<AfvMessage> for NetworkLogger {
                 }
             },
             AfvMessage::Turret(_m) => {
-                
-            }
-            AfvMessage::Turret2(_m) => {
                 
             }
             _ => println!("Network traffic: {:?}", msg),

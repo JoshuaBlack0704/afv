@@ -2,13 +2,38 @@ use arduino_hal::{Spi, spi::ChipSelectPin, prelude::{_embedded_hal_blocking_spi_
 use embedded_hal::digital::v2::OutputPin;
 
 pub mod control;
-pub mod common_offsets;
-pub mod socket_offsets;
-
 pub mod common_register;
 pub mod socket_register;
 
-pub struct W5500{}
+pub struct W5500{
+    
+}
+impl W5500{
+    pub fn new(
+        mode: common_register::ModeRegister, 
+        gateway: [u8;4], 
+        subnet: [u8;4], 
+        mac: [u8;6], 
+        ip: [u8;4],
+        spi: &mut Spi,
+        cs: &mut ChipSelectPin<PB2>
+    )
+-> (u8, W5500)     {
+        let common = Self::common_register();
+        common.write_mode_register(mode, spi, cs);
+        arduino_hal::delay_us(1);
+        common.write_gateway_addr(gateway, spi, cs);
+        arduino_hal::delay_us(1);
+        common.write_subnet(subnet, spi, cs);
+        arduino_hal::delay_us(1);
+        common.write_mac(mac, spi, cs);
+        arduino_hal::delay_us(1);
+        common.write_ip(ip, spi, cs);
+        arduino_hal::delay_us(1);
+        (common.read_version_register(spi, cs), Self{})
+        
+    }
+}
 
 pub fn header(addr: impl Into<u16>, control: impl Into<u8>) -> [u8;3]{
     let addr = addr.into().to_be_bytes();
