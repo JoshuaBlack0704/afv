@@ -237,15 +237,15 @@ impl From<[u8;1]> for Command{
     }
 }
 impl Command{
-    pub const OPEN: Self = Self(0x01);
-    pub const LISTEN: Self = Self(0x02);
-    pub const CONNECT: Self = Self(0x04);
+    pub const OPEN:       Self = Self(0x01);
+    pub const LISTEN:     Self = Self(0x02);
+    pub const CONNECT:    Self = Self(0x04);
     pub const DISCONNECT: Self = Self(0x08);
-    pub const CLOSE: Self = Self(0x10);
-    pub const SEND: Self = Self(0x20);
-    pub const SEND_MAC: Self = Self(0x21);
-    pub const SEND_KEEP: Self = Self(0x22);
-    pub const RECV: Self = Self(0x40);
+    pub const CLOSE:      Self = Self(0x10);
+    pub const SEND:       Self = Self(0x20);
+    pub const SEND_MAC:   Self = Self(0x21);
+    pub const SEND_KEEP:  Self = Self(0x22);
+    pub const RECV:       Self = Self(0x40);
 }
 
 pub struct BufferSize(u8);
@@ -326,22 +326,36 @@ impl Socket{
     pub fn last_msg(&self) -> Option<InternalMessage> {
         self.last_msg.clone()
     }
-    pub fn receive(&mut self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>){
+    pub fn receive_blocking(&mut self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> InternalMessage {
         loop{
-            if let SocketStatus::Closed = self.read_status(spi, cs){
-                return;
-            }
-            if self.read_rx_recv_size(spi, cs) >= SOCKET_MSG_SIZE as u16{
-                let data = self.read_rx_buff::<SOCKET_MSG_SIZE>(spi, cs);
-                if let Ok((msg, _)) = serde_json_core::from_slice(&data){
-                   self.last_msg = Some(msg); 
-                }
-                let read_ptr = self.read_rx_read_ptr(spi, cs);
-                self.write_rx_read_ptr(read_ptr + SOCKET_MSG_SIZE as u16, spi, cs);
-                self.write_cmd(Command::RECV, spi, cs);
-                return;
+            if let Some(msg) = self.receive(spi, cs){
+               return msg; 
             }
         }
+    }
+    pub fn receive(&mut self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> Option<InternalMessage>{
+        if let SocketStatus::Closed = self.read_status(spi, cs){
+            return None;
+        }
+        if self.read_rx_recv_size(spi, cs) >= SOCKET_MSG_SIZE as u16{
+            let data = self.read_rx_buff::<SOCKET_MSG_SIZE>(spi, cs);
+            let mut msg: Option<InternalMessage> = None;
+            if let Ok((_msg, _)) = serde_json_core::from_slice(&data){
+                self.last_msg = Some(_msg); 
+                msg = Some(_msg);
+            }
+            let read_ptr = self.read_rx_read_ptr(spi, cs);
+            self.write_rx_read_ptr(read_ptr + SOCKET_MSG_SIZE as u16, spi, cs);
+            self.write_cmd(Command::RECV, spi, cs);
+            return msg;
+        }
+        None
+    }
+    pub fn send(&mut self, data: &[u8], spi: &mut Spi, cs: &mut ChipSelectPin<PB2>){
+        if let SocketStatus::Closed = self.read_status(spi, cs){
+            return;
+        }
+        
     }
     pub fn read_rx_buff<const N: usize>(&self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> [u8;N]{
         let header = header(self.read_rx_read_ptr(spi, cs), ControlByte::new(self.socket_block.socket_rx(), Rw::READ, Om::VDM));

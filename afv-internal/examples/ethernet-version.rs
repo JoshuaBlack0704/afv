@@ -2,7 +2,7 @@
 #![no_main]
 #![feature(abi_avr_interrupt)]
 
-use afv_internal::{w5500::{W5500, socket_register::{SocketStatus, self, Command, SocketBlock}, common_register::ModeRegister}, TESTPORT};
+use afv_internal::{w5500::{W5500, socket_register::{SocketStatus, self, SocketBlock}}, TESTPORT, mainctl::MainCtl};
 use arduino_hal::Spi;
 use embedded_hal::spi::{Polarity, Phase};
 use panic_halt as _;
@@ -62,7 +62,7 @@ fn main() -> ! {
             continue;
         }
 
-        socket0.receive(&mut spi, &mut cs);
+        socket0.receive_blocking(&mut spi, &mut cs);
         if let Some(msg) = socket0.last_msg(){
             let _ = ufmt::uwriteln!(&mut serial, "Socket 0 received msg {}: {:?}", msg_count, msg);
             msg_count += 1;
