@@ -52,7 +52,7 @@ fn main() -> ! {
 
     let mode = socket_register::Mode::default().set_protocol_tcp();
     let socket0 = W5500::socket_n(SocketBlock::SOCKET0, mode, MAINCTLPORT, &mut spi, &mut cs);
-    let mut mainctl = MainCtl::new(socket0);
+    let mut mainctl = MainCtl::new(socket0, pins.d2.into_output());
 
     loop {
         mainctl.process(&mut serial, &mut spi, &mut cs);

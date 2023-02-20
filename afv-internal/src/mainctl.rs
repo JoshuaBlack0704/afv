@@ -1,4 +1,4 @@
-use arduino_hal::{spi::ChipSelectPin, hal::{port::PB2, usart::Usart0}, Spi, clock::MHz16};
+use arduino_hal::{spi::ChipSelectPin, hal::{port::{PB2, PD2}, usart::Usart0}, Spi, clock::MHz16, port::{Pin, mode::Output}};
 
 use crate::{w5500::socket_register::Socket, network::InternalMessage};
 
@@ -9,15 +9,17 @@ pub struct MainCtl{
     pump_refresh_budget: u32,
     pump_status: bool,
     server_connected: bool,
+    pump: Pin<Output, PD2>,
 }
 
 impl MainCtl{
-    pub fn new(socket: Socket) -> MainCtl {
+    pub fn new(socket: Socket, pump_pin: Pin<Output, PD2>) -> MainCtl {
         Self{
             socket,
             pump_status: Default::default(),
             pump_refresh_budget: PUMP_REFRESH_BUDGET,
             server_connected: false,
+            pump: pump_pin,
         }
     }
     /// Will update and conduct all internal systems in a non-blocking manner
@@ -66,6 +68,13 @@ impl MainCtl{
                 let _ = ufmt::uwriteln!(serial, "MAIN CTL: pump deactivated");
                 self.pump_status = false;
             }
+        }
+
+        if self.pump_status{
+            self.pump.set_high();
+        }
+        else{
+            self.pump.set_low();
         }
     }
 }
