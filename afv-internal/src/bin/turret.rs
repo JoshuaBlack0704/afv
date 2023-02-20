@@ -91,7 +91,7 @@ fn main() -> ! {
     let _ = spi.write(&[0]);
     let v = spi.read();
     if let Ok(_v)=v{
-        ufmt::uwriteln!(&mut serial, "Version: {}", _v);
+        let _ = ufmt::uwriteln!(&mut serial, "Version: {}", _v);
         if _v == 0x04{
             state.set_high();
         }

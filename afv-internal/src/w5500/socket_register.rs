@@ -295,6 +295,18 @@ impl Socket{
             }
         }
     }
+    pub fn server_connected(&mut self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> bool{
+        if let SocketStatus::Closed = self.read_status(spi, cs){
+            self.init(spi, cs);
+            self.write_cmd(Command::LISTEN, spi, cs);
+        }
+        if let SocketStatus::Established = self.read_status(spi, cs){
+            return true;
+        }
+        else{
+            return false;
+        }
+    }
     pub fn block_listen(&mut self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>){
         if let SocketStatus::Closed = self.read_status(spi, cs){
             self.init(spi, cs);
@@ -339,9 +351,9 @@ impl Socket{
         }
         if self.read_rx_recv_size(spi, cs) >= SOCKET_MSG_SIZE as u16{
             let data = self.read_rx_buff::<SOCKET_MSG_SIZE>(spi, cs);
-            let mut msg: Option<InternalMessage> = None;
-            if let Ok((_msg, _)) = serde_json_core::from_slice(&data){
-                self.last_msg = Some(_msg); 
+            let mut msg = None;
+            if let Some(_msg) = InternalMessage::from_msg(data){
+                self.last_msg = Some(_msg);
                 msg = Some(_msg);
             }
             let read_ptr = self.read_rx_read_ptr(spi, cs);
@@ -351,15 +363,34 @@ impl Socket{
         }
         None
     }
-    pub fn send(&mut self, data: &[u8], spi: &mut Spi, cs: &mut ChipSelectPin<PB2>){
+    pub fn send_blocking(&mut self, msg: InternalMessage, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>){
+        self.send(msg, spi, cs);
+        while self.read_tx_free_size(spi, cs) < self.read_tx_buff_size(spi, cs) as u16 * 1024{
+            
+        }
+    }
+    pub fn send(&mut self, msg: InternalMessage, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>){
         if let SocketStatus::Closed = self.read_status(spi, cs){
             return;
         }
-        
+        if let Some(data) = msg.to_msg(){
+            let free_size = self.read_tx_free_size(spi, cs);
+            if data.len() as u16 > free_size{
+                return;
+            }
+            self.write_tx_buff(&data, spi, cs);
+            let write_ptr = self.read_tx_write_ptr(spi, cs);
+            self.write_tx_write_ptr(write_ptr + data.len() as u16, spi, cs);
+            self.write_cmd(Command::SEND, spi, cs);
+        }
     }
     pub fn read_rx_buff<const N: usize>(&self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> [u8;N]{
         let header = header(self.read_rx_read_ptr(spi, cs), ControlByte::new(self.socket_block.socket_rx(), Rw::READ, Om::VDM));
         read::<N>(header, spi, cs)
+    }
+    pub fn write_tx_buff(&self, data: &[u8], spi: &mut Spi, cs: &mut ChipSelectPin<PB2>){
+        let header = header(self.read_tx_write_ptr(spi, cs), ControlByte::new(self.socket_block.socket_tx(), Rw::WRITE, Om::VDM));
+        write(header, data, spi, cs);
     }
     pub fn read_mode(&self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> Mode{
         arduino_hal::delay_us(1);

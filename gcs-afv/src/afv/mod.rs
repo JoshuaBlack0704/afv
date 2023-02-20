@@ -15,6 +15,7 @@ pub mod mainctl;
 pub enum GuiSystem{
     Flir,
     Turret,
+    MainCtl,
 }
 
 #[allow(unused)]
@@ -95,7 +96,7 @@ impl GuiElement for Afv{
             .show_ui(ui, |ui|{
                 ui.selectable_value(&mut (*selected), GuiSystem::Flir, "Flir");
                 ui.selectable_value(&mut (*selected), GuiSystem::Turret, "Turret");
-                
+                ui.selectable_value(&mut (*selected), GuiSystem::MainCtl, "MainCtl");
             });
         ui.separator();
         match *selected{
@@ -104,6 +105,9 @@ impl GuiElement for Afv{
             },
             GuiSystem::Turret => {
                 self.turret.clone().render(ui);
+            },
+            GuiSystem::MainCtl => {
+                self.mainctl.clone().render(ui);
             },
         }
     }

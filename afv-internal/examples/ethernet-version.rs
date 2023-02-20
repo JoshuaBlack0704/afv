@@ -2,15 +2,16 @@
 #![no_main]
 #![feature(abi_avr_interrupt)]
 
-use afv_internal::{w5500::{W5500, socket_register::{SocketStatus, self, SocketBlock}}, TESTPORT, mainctl::MainCtl};
+use afv_internal::{w5500::{W5500, socket_register::{self, SocketBlock}}, mainctl::MainCtl};
+use afv_internal::MAINCTLPORT;
 use arduino_hal::Spi;
 use embedded_hal::spi::{Polarity, Phase};
 use panic_halt as _;
 
-const GATEWAY: [u8;4] = [169,245,228,0];
+const GATEWAY: [u8;4] = [10,192,138,254];
 const SUBNET: [u8;4] = [255,255,255,0];
 const MAC: [u8;6] = [0x00,0x08,0xdc,0x01,0x02,0x03];
-const IP: [u8;4] = [169,254,228,10];
+const IP: [u8;4] = [10,192,138,10];
 
 #[arduino_hal::entry]
 fn main() -> ! {
@@ -31,7 +32,7 @@ fn main() -> ! {
     let (mut spi, mut cs) = Spi::new(peripherals.SPI, sck, mosi, miso, cs, settings);
 
     arduino_hal::delay_ms(100);
-    let (version, w5500) = W5500::new(Default::default(), GATEWAY, SUBNET, MAC, IP, &mut spi, &mut cs);
+    let (version, _) = W5500::new(Default::default(), GATEWAY, SUBNET, MAC, IP, &mut spi, &mut cs);
     let common_block = W5500::common_register();
 
     let _ = ufmt::uwriteln!(&mut serial, "W5500 Version: {}", version);
@@ -50,23 +51,11 @@ fn main() -> ! {
     let _ = ufmt::uwriteln!(&mut serial, "W5500 Link Status {}", common_block.read_phy_cfg(&mut spi, &mut cs).link_status());
 
     let mode = socket_register::Mode::default().set_protocol_tcp();
-    let mut socket0 = W5500::socket_n(SocketBlock::SOCKET0, mode, TESTPORT, &mut spi, &mut cs);
-    let mut msg_count = 0;
+    let socket0 = W5500::socket_n(SocketBlock::SOCKET0, mode, MAINCTLPORT, &mut spi, &mut cs);
+    let mut mainctl = MainCtl::new(socket0);
 
     loop {
-        if let SocketStatus::Closed = socket0.read_status(&mut spi, &mut cs){
-            let _ = ufmt::uwriteln!(&mut serial, "Socket 0 Closed");
-            let _ = ufmt::uwriteln!(&mut serial, "Socket 0 Listening");
-            socket0.block_listen(&mut spi, &mut cs);
-            let _ = ufmt::uwriteln!(&mut serial, "Socket 0 connected to peer at: {:?}", socket0.peer_ip());
-            continue;
-        }
-
-        socket0.receive_blocking(&mut spi, &mut cs);
-        if let Some(msg) = socket0.last_msg(){
-            let _ = ufmt::uwriteln!(&mut serial, "Socket 0 received msg {}: {:?}", msg_count, msg);
-            msg_count += 1;
-        }
+        mainctl.process(&mut serial, &mut spi, &mut cs);
 
     }
 }

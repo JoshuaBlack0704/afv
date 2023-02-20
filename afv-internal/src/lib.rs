@@ -1,7 +1,7 @@
 #![no_std]
 
-pub const TESTPORT: u16 = 3030;
-pub const SOCKET_MSG_SIZE: usize = 10;
+pub const MAINCTLPORT: u16 = 3030;
+pub const SOCKET_MSG_SIZE: usize = 256;
 
 pub mod network;
 
