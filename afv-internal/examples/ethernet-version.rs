@@ -65,6 +65,8 @@ fn main() -> ! {
     arduino_hal::delay_us(10);
     let port = socket0.read_src_port(&mut spi, &mut cs);
     let _ = ufmt::uwriteln!(&mut serial, "Socket 0 Port : {:?}", port);
+    let rx_size = socket0.read_rx_buff_size(&mut spi, &mut cs);
+    let _ = ufmt::uwriteln!(&mut serial, "Socket 0 Rx Size: {:?}", rx_size);
     
     
     

@@ -15,7 +15,7 @@ impl SocketAddress{
     pub const INTERRUPT:    Self = Self(0x0002);
     pub const STATUS:       Self = Self(0x0003);
     pub const SOURCE_PORT:  Self = Self(0x0004);
-    pub const DST_MAC:  Self = Self(0x0006);
+    pub const DST_MAC:      Self = Self(0x0006);
     pub const DST_IP:       Self = Self(0x000c);
     pub const DST_PORT:     Self = Self(0x0010);
     pub const MAX_SEG_SIZE: Self = Self(0x0012);
@@ -126,35 +126,35 @@ pub struct Mode{
     reg: u8,
 }
 impl Mode{
-    pub fn enable_upd_multicasting(mut self) -> Mode {
+    pub fn enable_upd_multicasting(mut self) -> Self {
         self.reg |= 0b10000000;
         self
     }
-    pub fn disable_upd_multicasting(mut self) -> Mode {
+    pub fn disable_upd_multicasting(mut self) -> Self {
         self.reg &= 0b01111111;
         self
     }
-    pub fn enable_broadcast_block(mut self) -> Mode {
+    pub fn enable_broadcast_block(mut self) -> Self {
         self.reg |= 0b10000000;
         self
     }
-    pub fn disable_broadcast_block(mut self) -> Mode {
+    pub fn disable_broadcast_block(mut self) -> Self {
         self.reg &= 0b10111111;
         self
     }
-    pub fn enable_no_delay_ack(mut self) -> Mode {
+    pub fn enable_no_delay_ack(mut self) -> Self {
         self.reg |= 0b00100000;
         self
     }
-    pub fn disable_no_delay_ack(mut self) -> Mode {
+    pub fn disable_no_delay_ack(mut self) -> Self {
         self.reg &= 0b11011111;
         self
     }
-    pub fn enable_unicast(mut self) -> Mode {
+    pub fn enable_unicast(mut self) -> Self {
         self.reg |= 0b00010000;
         self
     }
-    pub fn disable_unicast(mut self) -> Mode {
+    pub fn disable_unicast(mut self) -> Self {
         self.reg &= 0b11101111;
         self
     }
@@ -175,7 +175,7 @@ impl Mode{
     }
     pub fn set_protocol_macraw(mut self) -> Self{
         self.reg &= 0b11110000;
-        self.reg |= 0b00001000;
+        self.reg |= 0b00000100;
         self
     }
 }
@@ -220,6 +220,21 @@ impl Command{
     pub const SEND_MAC: Self = Self(0x21);
     pub const SEND_KEEP: Self = Self(0x22);
     pub const RECV: Self = Self(0x40);
+}
+
+pub struct BufferSize(u8);
+impl From<BufferSize> for u8{
+    fn from(s: BufferSize) -> Self {
+        s.0
+    }
+}
+impl BufferSize{
+    pub const ZERO: Self = Self(0);
+    pub const ONE: Self = Self(1);
+    pub const TWO: Self = Self(2);
+    pub const FOUR: Self = Self(4);
+    pub const EIGHT: Self = Self(8);
+    pub const SIXTEEN: Self = Self(16);
 }
 
 pub struct SocketNBlock{
@@ -285,6 +300,76 @@ impl SocketNBlock{
         let header = header(SocketAddress::DST_IP, ControlByte::new(self.socket_num, Rw::WRITE, Om::VDM));
         let ip = ip.into();
         write(header, &ip, spi, cs);
+    }
+    pub fn read_dst_port(&self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> u16{
+        let header = header(SocketAddress::DST_PORT, ControlByte::new(self.socket_num, Rw::READ, Om::VDM));
+        u16::from_be_bytes(read::<DST_PORT_SIZE>(header, spi, cs))
+    }
+    pub fn write_dst_port(&self, port: impl Into<u16>, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>){
+        let header = header(SocketAddress::DST_PORT, ControlByte::new(self.socket_num, Rw::WRITE, Om::VDM));
+        let port = port.into().to_be_bytes();
+        write(header, &port, spi, cs);
+    }
+    pub fn read_rx_buff_size(&self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> u8{
+        let header = header(SocketAddress::RX_BUFF_SIZE, ControlByte::new(self.socket_num, Rw::READ, Om::VDM));
+        read::<RX_BUFF_SIZE_SIZE>(header, spi, cs)[0]
+    }
+    pub fn write_rx_buff_size(&self, size: BufferSize, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>){
+        let header = header(SocketAddress::RX_BUFF_SIZE, ControlByte::new(self.socket_num, Rw::WRITE, Om::VDM));
+        let size = [size.into()];
+        write(header, &size, spi, cs);
+    }
+    pub fn read_tx_buff_size(&self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> u8{
+        let header = header(SocketAddress::TX_BUFF_SIZE, ControlByte::new(self.socket_num, Rw::READ, Om::VDM));
+        read::<TX_BUFF_SIZE_SIZE>(header, spi, cs)[0]
+    }
+    pub fn write_tx_buff_size(&self, size: BufferSize, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>){
+        let header = header(SocketAddress::TX_BUFF_SIZE, ControlByte::new(self.socket_num, Rw::WRITE, Om::VDM));
+        let size = [size.into()];
+        write(header, &size, spi, cs);
+    }
+    pub fn read_tx_free_size(&self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> u16{
+        let header = header(SocketAddress::TX_FREE_SIZE, ControlByte::new(self.socket_num, Rw::READ, Om::VDM));
+        u16::from_be_bytes(read::<TX_FREE_SIZE_SIZE>(header, spi, cs))
+    }
+    pub fn read_tx_read_ptr(&self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> u16{
+        let header = header(SocketAddress::TX_READ_PTR, ControlByte::new(self.socket_num, Rw::READ, Om::VDM));
+        u16::from_be_bytes(read::<TX_READ_PTR_SIZE>(header, spi, cs))
+    }
+    pub fn read_tx_write_ptr(&self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> u16{
+        let header = header(SocketAddress::TX_WRITE_PTR, ControlByte::new(self.socket_num, Rw::READ, Om::VDM));
+        u16::from_be_bytes(read::<TX_WRITE_PTR_SIZE>(header, spi, cs))
+    }
+    pub fn write_tx_write_ptr(&self, ptr: impl Into<u16>, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>){
+        let header = header(SocketAddress::TX_WRITE_PTR, ControlByte::new(self.socket_num, Rw::WRITE, Om::VDM));
+        let ptr = ptr.into().to_be_bytes();
+        write(header, &ptr, spi, cs);
+    }
+    pub fn read_rx_recv_size(&self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> u16{
+        let header = header(SocketAddress::RX_RCV_SIZE, ControlByte::new(self.socket_num, Rw::READ, Om::VDM));
+        u16::from_be_bytes(read::<RX_RCV_SIZE_SIZE>(header, spi, cs))
+    }
+    pub fn read_rx_read_ptr(&self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> u16{
+        let header = header(SocketAddress::RX_READ_PTR, ControlByte::new(self.socket_num, Rw::READ, Om::VDM));
+        u16::from_be_bytes(read::<RX_READ_PTR_SIZE>(header, spi, cs))
+    }
+    pub fn write_rx_read_ptr(&self, ptr: impl Into<u16>, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>){
+        let header = header(SocketAddress::RX_READ_PTR, ControlByte::new(self.socket_num, Rw::WRITE, Om::VDM));
+        let ptr = ptr.into().to_be_bytes();
+        write(header, &ptr, spi, cs);
+    }
+    pub fn read_rx_write_ptr(&self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> u16{
+        let header = header(SocketAddress::RX_WRITE_PTR, ControlByte::new(self.socket_num, Rw::READ, Om::VDM));
+        u16::from_be_bytes(read::<RX_WRITE_PTR_SIZE>(header, spi, cs))
+    }
+    pub fn read_keep_alive(&self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> u8{
+        let header = header(SocketAddress::KEEP_ALV_TMR, ControlByte::new(self.socket_num, Rw::READ, Om::VDM));
+        read::<KEEP_ALV_TMR_SIZE>(header, spi, cs)[0]
+    }
+    pub fn write_keep_alive(&self, timer: impl Into<u8>, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>){
+        let header = header(SocketAddress::KEEP_ALV_TMR, ControlByte::new(self.socket_num, Rw::WRITE, Om::VDM));
+        let timer = [timer.into()];
+        write(header, &timer, spi, cs);
     }
     
 }
