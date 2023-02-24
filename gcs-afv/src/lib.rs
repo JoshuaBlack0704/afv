@@ -7,3 +7,5 @@ pub mod scanner;
 pub mod afvctl;
 
 pub mod afv;
+
+pub mod bus;
