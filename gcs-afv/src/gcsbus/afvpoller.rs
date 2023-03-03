@@ -3,8 +3,9 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use eframe::egui::Ui;
 use rand::{thread_rng, Rng};
+use tokio::net::TcpStream;
 
-use crate::{AfvCtlMessage, bus::{BusElement, Bus}};
+use crate::{AfvCtlMessage, bus::{BusElement, Bus}, GCSBRIDGEPORT};
 
 use super::Renderable;
 
@@ -15,12 +16,14 @@ pub struct AfvPoller{
 
 impl AfvPoller{
     pub async fn new(bus: Bus<AfvCtlMessage>) -> Arc<AfvPoller> {
-        Arc::new(
+        let poller = Arc::new(
             Self{
                 bus,
                 uuid: thread_rng().gen::<u64>(), 
             }
-        )
+        );
+        
+        poller
     }
 }
 
@@ -39,3 +42,4 @@ impl Renderable for AfvPoller{
         ui.label("Poller");
     }
 }
+

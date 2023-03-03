@@ -1,14 +1,6 @@
-pub mod gui;
-
-pub mod network;
-
-pub mod scanner;
-
-pub mod afvctl;
-
-pub mod afv;
-
 pub mod bus;
+
+pub const GCSBRIDGEPORT: u16 = 4040;
 
 #[derive(Clone)]
 pub enum AfvCtlMessage{
@@ -18,6 +10,8 @@ pub enum AfvCtlMessage{
 pub struct GcsArgs{
     
 }
+
+pub mod networkbus;
 
 pub mod afvbus;
 
