@@ -1,15 +1,16 @@
+use serde::{Serialize, Deserialize};
+
 pub mod bus;
 
 pub const GCSBRIDGEPORT: u16 = 4040;
 
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum AfvCtlMessage{
+    NetworkAfvUUID(u64),
+    NetworkAfvUUIDPoll,
     
 }
 
-pub struct GcsArgs{
-    
-}
 
 pub mod networkbus;
 

@@ -1,10 +1,10 @@
-use std::{collections::HashSet, net::SocketAddr};
+use std::{collections::HashSet, net::SocketAddr, sync::Arc};
 
 use default_net::get_interfaces;
 use flume::Sender;
 use ipnet::Ipv4Net;
 use rand::{thread_rng, Rng};
-use tokio::{net::TcpStream, sync::Semaphore};
+use tokio::{net::{TcpStream, TcpSocket}, sync::Semaphore, time::{sleep, Duration}};
 
 
 pub struct ScanBuilder{
@@ -12,6 +12,7 @@ pub struct ScanBuilder{
     tgt_ports: Vec<u16>,
     excluded_peers: PeerExclusion,
     parallel_attempts: usize,
+    wait_time: Duration,
 }
 
 impl ScanBuilder{
@@ -66,37 +67,42 @@ impl ScanBuilder{
         // Now we enter the main while loop
         while scan_budget >= 1{
             // We need to consume a scan
-            println!("Scan {}, {} remaining scans", scan_id, scan_budget);
             match self.scan_count{
-                ScanCount::Infinite => {},
-                ScanCount::Limited(_) => {scan_budget -= 1},
+                ScanCount::Infinite => {
+                    println!("Scan {} restarting", scan_id);
+                },
+                ScanCount::Limited(_) => {
+                    println!("Scan {}, {} remaining scans", scan_id, scan_budget);
+                    scan_budget -= 1;
+                },
             };
 
             // We will need the address of each interface to attempt a socket bind
             let mut interface_nets = vec![];
             for interface in interfaces.iter(){
-                // We debug its name
-                match &interface.friendly_name{
-                    Some(n) => println!("Scan {} using interface {}", scan_id, *n),
-                    None => println!("Scan {} using interface {}", scan_id, interface.name),
-                }
                 if let Some(ip) = interface.ipv4.first(){
-                    match Ipv4Net::with_netmask(ip.addr, ip.netmask){
-                        Ok(net) => {
-                            interface_nets.push(net);
-                        },
-                        Err(_) => {},
+                    if let Ok(net) = Ipv4Net::with_netmask(ip.addr, ip.netmask){
+                        // We can skip loopback since we wont be using it
+                        if net.addr().is_loopback(){continue;}
+                        // We debug its name
+                        match &interface.friendly_name{
+                            Some(n) => println!("Scan {} using interface {}", scan_id, *n),
+                            None => println!("Scan {} using interface {}", scan_id, interface.name),
+                        }
+                        interface_nets.push(net);
                     }
                 }
             }
 
             // We prepare the parallel scan semaphore
-            let semaphore = Semaphore::new(self.parallel_attempts);
+            let semaphore = Arc::new(Semaphore::new(self.parallel_attempts));
+            // The success channel
+            let (socket_tx, socket_rx) = flume::unbounded();
+            // For debugging
+            let mut task_count = 0;
 
             // Now we begin the net search
             for net in interface_nets{
-                // We can skip loopback since we wont be using it
-                if net.addr().is_loopback(){continue;}
 
                 for host in net.hosts(){
                     for &port in self.tgt_ports.iter(){
@@ -110,11 +116,55 @@ impl ScanBuilder{
                         }
 
                         // We will now dispatch a connection task for this target
+                        let tx = tx.clone();
+                        let socket_tx = socket_tx.clone();
+                        let semaphore = semaphore.clone();
+                        task_count += 1;
+                        
+                        tokio::spawn(async move {
+                            let _signal = socket_tx;
+                            let _permit = match semaphore.acquire().await{
+                                Ok(p) => p,
+                                Err(_) => return,
+                            };
+                            if tx.is_disconnected(){
+                                return;
+                            }
+                            let socket = match TcpSocket::new_v4(){
+                                Ok(s) => s,
+                                Err(_) => return,
+                            };
+                            if let Err(_) = socket.bind((net.addr(), 0u16).into()){
+                                return;
+                            }
+                            if let Ok(s) = socket.connect(tgt).await{
+                                if let Ok(addr) = s.peer_addr(){
+                                    println!("Scanner found peer at {}", addr)
+                                }
+                                let _ = tx.send_async(s).await;
+                            }
+
+                        });
                     }
                 }
             }
+            
+            println!("Scan {} started {} connect tasks", scan_id, task_count);
+
+            drop(socket_tx);
+            // This will complete with an error when the last _signal is dropped in
+            // the socket connect tasks
+            let _: Result<bool, flume::RecvError> = socket_rx.recv_async().await;
+
+            // We are now finished with a scan round
+            // we will wait for the specified wait time
+            println!("Scan {} round completed", scan_id);
+            if tx.is_disconnected(){
+                return;
+            }
+            sleep(self.wait_time).await;
+            
         }
-        
     }
 }
 
@@ -125,6 +175,7 @@ impl Default for ScanBuilder{
             excluded_peers: Default::default(),
             tgt_ports: Default::default(),
             parallel_attempts: 500,
+            wait_time: Duration::from_secs(5),
         }
     }
 }

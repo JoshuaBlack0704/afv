@@ -1,41 +1,46 @@
-#![allow(unused)]
 use std::sync::Arc;
 
-use async_trait::async_trait;
+
+use clap::Parser;
 use eframe::{
     egui::{self, CentralPanel, Ui},
     App,
 };
-use rand::{thread_rng, Rng};
+
 use tokio::{
-    runtime::{Handle, Runtime},
-    sync::Mutex,
+    runtime::Handle,
+    sync::Mutex, time::Duration,
 };
 
 use crate::{
-    bus::{Bus, BusElement},
-    AfvCtlMessage, GcsArgs,
+    bus::Bus,
+    AfvCtlMessage,
 };
 
-use self::afvpoller::AfvPoller;
+use self::bridgefinder::BridgeFinder;
 
-pub mod afvpoller;
+pub mod bridgefinder;
+
 
 pub trait Renderable {
     fn render(&self, ui: &mut Ui);
 }
 
+#[derive(Parser, Debug)]
+pub struct GcsArgs{
+    
+}
+
 pub struct Gcs {
-    uuid: u64,
-    handle: Handle,
-    bus: Bus<AfvCtlMessage>,
+    _handle: Handle,
     ui_target: Mutex<Arc<dyn Renderable>>,
 
-    poller: Arc<AfvPoller>,
+    bridge_finder: Arc<BridgeFinder>,
 }
 
 impl Gcs {
-    pub fn launch(args: GcsArgs) {
+    pub fn launch() {
+        let _args = GcsArgs::parse();
         let rt = Arc::new(
             tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
@@ -59,7 +64,7 @@ impl Gcs {
             });
             ui.horizontal(|ui| {
                 if ui.button("Afv Poller").clicked() {
-                    *self.ui_target.blocking_lock() = self.poller.clone();
+                    *self.ui_target.blocking_lock() = self.bridge_finder.clone();
                 }
             });
         });
@@ -71,20 +76,19 @@ impl Gcs {
     }
     async fn new() -> Gcs {
         let bus = Bus::<AfvCtlMessage>::new().await;
-        let poller = AfvPoller::new(bus.clone()).await;
-        bus.add_element(poller.clone());
+        let poller = BridgeFinder::new(bus.clone(), Duration::from_secs(2)).await;
+        bus.add_element(poller.clone()).await;
         Self {
-            uuid: thread_rng().gen::<u64>(),
-            handle: Handle::current(),
-            bus,
-            poller: poller.clone(),
+            _handle: Handle::current(),
+            bridge_finder: poller.clone(),
             ui_target: Mutex::new(poller.clone()),
         }
     }
 }
 
 impl App for Gcs {
-    fn update(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
+        self.bridge_finder.process_bridges();
         CentralPanel::default().show(ctx, |ui| {
             self.top_panel(ui);
             self.central_panel(ui);

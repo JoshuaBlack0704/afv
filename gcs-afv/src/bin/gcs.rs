@@ -1,4 +1,5 @@
-use gcs_afv::{GcsArgs, gcsbus::Gcs};
+use gcs_afv::gcsbus::Gcs;
+
 fn main(){
-    Gcs::launch(GcsArgs{});
+    Gcs::launch();
 }
