@@ -3,19 +3,21 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use rand::{thread_rng, Rng};
 
-use crate::{bus::{Bus, BusElement}, AfvCtlMessage};
+use crate::{bus::{Bus, BusElement, BusUuid}, messages::{AfvCtlMessage, NetworkMessages}};
+
+use super::AfvUuid;
 
 pub struct PollResponder{
-    uuid: u64,
-    afv_uuid: u64,
+    uuid: BusUuid,
+    afv_uuid: AfvUuid,
     bus: Bus<AfvCtlMessage>,
 }
 
 impl PollResponder{
-    pub async fn new(bus: Bus<AfvCtlMessage>, afv_uuid: u64){
+    pub async fn new(bus: Bus<AfvCtlMessage>, afv_uuid: AfvUuid){
         let responder = Arc::new(
             Self{
-                uuid: thread_rng().gen::<u64>(),
+                uuid: thread_rng().gen(),
                 afv_uuid,
                 bus: bus.clone(),
             }
@@ -28,14 +30,13 @@ impl PollResponder{
 #[async_trait]
 impl BusElement<AfvCtlMessage> for PollResponder{
     async fn recieve(self: Arc<Self>, msg: AfvCtlMessage){
-        match msg{
-            AfvCtlMessage::NetworkAfvUUIDPoll => {
-                self.bus.send(self.uuid, AfvCtlMessage::NetworkAfvUUID(self.afv_uuid)).await;
-            },
-            _ => {}
+        if let AfvCtlMessage::Network(msg) = msg{
+            if let NetworkMessages::PollAfvUuid = msg{
+                self.bus.clone().send(self.uuid, AfvCtlMessage::Network(NetworkMessages::AfvUuid(self.afv_uuid))).await;
+            }
         }
     }
-    fn uuid(&self) -> u64{
+    fn uuid(&self) -> BusUuid{
         self.uuid
     }
 }

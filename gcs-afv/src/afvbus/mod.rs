@@ -4,7 +4,7 @@ use clap::Parser;
 use rand::{thread_rng, Rng};
 use tokio::{net::ToSocketAddrs, time::sleep};
 
-use crate::{bus::Bus, AfvCtlMessage, networkbus::networkbridge::NetworkBridge, GCSBRIDGEPORT};
+use crate::{bus::Bus, networkbus::networkbridge::NetworkBridge, GCSBRIDGEPORT, messages::AfvCtlMessage};
 
 use self::pollresponder::PollResponder;
 
@@ -13,6 +13,7 @@ pub struct AfvArgs{
     connect: Option<SocketAddr>,
 }
 
+pub type AfvUuid = u16;
 pub struct Afv;
 
 mod pollresponder;
@@ -22,7 +23,7 @@ impl Afv{
     fn client(addr: &impl ToSocketAddrs){
         let rt = Arc::new(tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("Could not build runtime"));
         rt.block_on(async move {
-            let afv_uuid = thread_rng().gen::<u64>();
+            let afv_uuid = thread_rng().gen::<AfvUuid>();
             let bus = Bus::<AfvCtlMessage>::new().await;
             PollResponder::new(bus.clone(), afv_uuid).await;
             println!("Afv connecting");
@@ -37,7 +38,7 @@ impl Afv{
     fn server(){
         let rt = Arc::new(tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("Could not build runtime"));
         rt.block_on(async move {
-            let afv_uuid = thread_rng().gen::<u64>();
+            let afv_uuid = thread_rng().gen::<AfvUuid>();
             let bus = Bus::<AfvCtlMessage>::new().await;
             PollResponder::new(bus.clone(), afv_uuid).await;
             println!("Afv listening on port {}", GCSBRIDGEPORT);

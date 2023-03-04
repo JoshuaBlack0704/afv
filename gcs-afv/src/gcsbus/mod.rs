@@ -12,14 +12,14 @@ use tokio::{
     sync::Mutex, time::Duration,
 };
 
-use crate::{
-    bus::Bus,
-    AfvCtlMessage,
-};
+use crate::{bus::Bus, messages::AfvCtlMessage};
 
-use self::bridgefinder::BridgeFinder;
+use self::{bridgefinder::BridgeFinder, afvselector::AfvSelector, afvctl::AfvController};
 
-pub mod bridgefinder;
+mod bridgefinder;
+mod afvselector;
+mod afvctl;
+
 
 
 pub trait Renderable {
@@ -34,8 +34,9 @@ pub struct GcsArgs{
 pub struct Gcs {
     _handle: Handle,
     ui_target: Mutex<Arc<dyn Renderable>>,
-
     bridge_finder: Arc<BridgeFinder>,
+    afv_selector: Arc<AfvSelector>,
+    afv_ctl: Arc<AfvController>,
 }
 
 impl Gcs {
@@ -63,8 +64,10 @@ impl Gcs {
                 ui.label("Ground Control Station");
             });
             ui.horizontal(|ui| {
-                if ui.button("Afv Poller").clicked() {
-                    *self.ui_target.blocking_lock() = self.bridge_finder.clone();
+                self.bridge_finder.render(ui);
+                self.afv_selector.render(ui);
+                if ui.button("Afv Control").clicked(){
+                    *self.ui_target.blocking_lock() = self.afv_ctl.clone();
                 }
             });
         });
@@ -76,15 +79,19 @@ impl Gcs {
     }
     async fn new() -> Gcs {
         let bus = Bus::<AfvCtlMessage>::new().await;
-        let poller = BridgeFinder::new(bus.clone(), Duration::from_secs(2)).await;
-        bus.add_element(poller.clone()).await;
+        let bridge_finder = BridgeFinder::new(bus.clone(), Duration::from_secs(2)).await;
+        let afv_selector = AfvSelector::new(bus.clone()).await;
+        let afv_ctl = AfvController::new(bus.clone()).await;
         Self {
             _handle: Handle::current(),
-            bridge_finder: poller.clone(),
-            ui_target: Mutex::new(poller.clone()),
+            bridge_finder: bridge_finder.clone(),
+            ui_target: Mutex::new(afv_ctl.clone()),
+            afv_selector,
+            afv_ctl,
         }
     }
 }
+
 
 impl App for Gcs {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {

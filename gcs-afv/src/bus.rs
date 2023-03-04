@@ -3,12 +3,12 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use tokio::{sync::RwLock, runtime::{Handle, Runtime}};
 
-type UUID = u64;
+pub type BusUuid = u64;
 
 #[async_trait]
 pub trait BusElement<M>: Send + Sync{
     async fn recieve(self: Arc<Self>, msg: M);
-    fn uuid(&self) -> UUID;
+    fn uuid(&self) -> BusUuid;
 }
 
 #[derive(Clone)]
@@ -27,7 +27,7 @@ impl<M: Clone> Bus <M>{
     pub fn new_blocking(rt: &Arc<Runtime>) -> Bus<M> {
         rt.block_on(Self::new())
     }
-    pub async fn send(&self, sender_id: UUID, msg: M){
+    pub async fn send(self, sender_id: BusUuid, msg: M){
         let elements = self.elements.read().await;
         for e in elements.iter(){
             if e.uuid() != sender_id{
@@ -35,8 +35,8 @@ impl<M: Clone> Bus <M>{
             }
         }
     }
-    pub fn send_blocking(&self, sender_id: UUID, msg: M){
-        self.handle.block_on(self.send(sender_id, msg));
+    pub fn send_blocking(&self, sender_id: BusUuid, msg: M){
+        self.handle.block_on(self.clone().send(sender_id, msg));
     }
     pub async fn add_element(&self, element: Arc<dyn BusElement<M>>){
         let mut elements = self.elements.write().await;
