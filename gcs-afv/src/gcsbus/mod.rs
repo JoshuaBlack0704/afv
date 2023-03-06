@@ -12,7 +12,7 @@ use tokio::{
     sync::Mutex, time::Duration,
 };
 
-use crate::{bus::Bus, messages::AfvCtlMessage};
+use crate::{bus::Bus, messages::AfvCtlMessage, afvbus::Afv};
 
 use self::{bridgefinder::BridgeFinder, afvselector::AfvSelector, afvctl::AfvController};
 
@@ -28,7 +28,8 @@ pub trait Renderable {
 
 #[derive(Parser, Debug)]
 pub struct GcsArgs{
-    
+    #[arg(short)]
+    simulate: bool,
 }
 
 pub struct Gcs {
@@ -41,7 +42,7 @@ pub struct Gcs {
 
 impl Gcs {
     pub fn launch() {
-        let _args = GcsArgs::parse();
+        let args = GcsArgs::parse();
         let rt = Arc::new(
             tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
@@ -49,7 +50,12 @@ impl Gcs {
                 .expect("Could not build async runtime"),
         );
 
-        let gcs = rt.block_on(Self::new());
+        let gcs = rt.block_on(async move{
+            if args.simulate{
+                tokio::spawn(Afv::simulate());
+            }
+            Self::new().await
+        });
 
         let opts = eframe::NativeOptions::default();
         eframe::run_native("Ground Control", opts, Box::new(|cc| gcs.build(cc)));

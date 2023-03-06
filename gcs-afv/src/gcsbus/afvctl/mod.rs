@@ -41,6 +41,7 @@ impl BusElement<AfvCtlMessage> for AfvController{
                 LocalMessages::SelectedAfv(uuid) => {
                     *self.afv_uuid.write().await = uuid;
                 },
+                _ => {}
             }
             return;
         }
