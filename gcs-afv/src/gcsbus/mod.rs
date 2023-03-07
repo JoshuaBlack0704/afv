@@ -110,5 +110,6 @@ impl App for Gcs {
             self.top_panel(ui);
             self.central_panel(ui);
         });
+        ctx.request_repaint();
     }
 }

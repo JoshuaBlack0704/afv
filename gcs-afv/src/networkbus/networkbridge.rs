@@ -69,7 +69,7 @@ impl NetworkBridge{
                 data.push(byte); 
 
                 if let Ok(msg) = bincode::deserialize::<AfvCtlMessage>(&data){
-                    println!("Received message {:?}", msg);
+                    // println!("Received message {:?}", msg);
                     if let AfvCtlMessage::Network(NetworkMessages::AfvUuid(uuid)) = msg{
                         *self.afv_uuid.write().await = Some(uuid);
                     }
@@ -91,7 +91,7 @@ impl NetworkBridge{
     }
 
     async fn forward(self: Arc<Self>, msg: AfvCtlMessage){
-        println!("Forwarding message {:?}", msg);
+        // println!("Forwarding message {:?}", msg);
         if let Ok(msg) = bincode::serialize(&msg){
             let _ = self.write.lock().await.write(&msg).await;
         }

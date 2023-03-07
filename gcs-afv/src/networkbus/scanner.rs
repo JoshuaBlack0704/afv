@@ -41,6 +41,7 @@ impl ScanBuilder{
     async fn scan(self, tx: Sender<TcpStream>){
         // First we pull the interfaces
         let interfaces = get_interfaces();
+      
         // Just used for debugging
         let scan_id = thread_rng().gen::<u16>();
         println!("Scan {} started", scan_id);
@@ -174,7 +175,7 @@ impl Default for ScanBuilder{
             scan_count: Default::default(),
             excluded_peers: Default::default(),
             tgt_ports: Default::default(),
-            parallel_attempts: 500,
+            parallel_attempts: 1000,
             wait_time: Duration::from_secs(5),
         }
     }

@@ -8,13 +8,19 @@ pub enum NetworkMessages{
     PollAfvUuid,
     AfvUuid(AfvUuid),
     FlirStream(AfvUuid),
-    NalPacket(AfvUuid, Vec<u8>)
+    #[serde(with = "serde_bytes")]
+    NalPacket(Vec<u8>),
+    FlirFilterLevel(u8),
+    FlirTargetIterations(u32),
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum LocalMessages{
     SelectedAfv(AfvUuid),
     FlirStream(AfvUuid),
-    NalPacket(AfvUuid, Vec<u8>),
+    #[serde(with = "serde_bytes")]
+    NalPacket(Vec<u8>),
+    FlirFilterLevel(u32),
+    FlirTargetIterations(u32),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

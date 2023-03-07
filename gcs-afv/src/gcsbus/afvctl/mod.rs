@@ -2,14 +2,17 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use eframe::{egui::{Ui, self}, epaint::TextureHandle};
-use image::{DynamicImage, ImageBuffer};
-use openh264::{decoder::Decoder, to_bitstream_with_001_be, nal_units};
+use glam::Vec2;
+use image::DynamicImage;
+use openh264::decoder::Decoder;
 use rand::{thread_rng, Rng};
-use tokio::{runtime::Handle, sync::RwLock, time::sleep};
+use tokio::{runtime::Handle, sync::RwLock};
 
 use crate::{bus::{Bus, BusUuid, BusElement}, afvbus::AfvUuid, messages::{AfvCtlMessage, LocalMessages, NetworkMessages}};
 
 use super::Renderable;
+
+mod flir;
 
 #[derive(PartialEq, Eq)]
 enum MenuTypes{
@@ -27,10 +30,15 @@ pub struct AfvController{
     menu: RwLock<MenuTypes>,
 
     // Flir fields
-    flir_stream: RwLock<bool>,
     flir_decoder: RwLock<Option<Decoder>>,
     flir_image: RwLock<DynamicImage>,
-    gui_image: RwLock<Option<TextureHandle>>,
+    flir_filtered_image: RwLock<Option<DynamicImage>>,
+    flir_gui_image: RwLock<Option<TextureHandle>>,
+    flir_filter: RwLock<bool>,
+    flir_filter_level: RwLock<u8>,
+    flir_analysis_barrier: RwLock<bool>,
+    flir_centroids: RwLock<(Vec2, Vec2)>,
+    flir_target_iterations: RwLock<u32>,
 }
 
 impl AfvController{
@@ -40,11 +48,16 @@ impl AfvController{
             bus: bus.clone(),
             handle: Handle::current(),
             afv_uuid: Default::default(),
-            flir_stream: Default::default(),
             flir_image: RwLock::new(DynamicImage::new_rgb8(300,300)),
-            gui_image: Default::default(),
+            flir_gui_image: Default::default(),
             menu: RwLock::new(MenuTypes::Main),
             flir_decoder: Default::default(),
+            flir_filtered_image: Default::default(),
+            flir_filter: Default::default(),
+            flir_filter_level: Default::default(),
+            flir_analysis_barrier: Default::default(),
+            flir_centroids: Default::default(),
+            flir_target_iterations: RwLock::new(2),
         });
 
         tokio::spawn(ctl.clone().flir_stream_manager());
@@ -52,22 +65,6 @@ impl AfvController{
         bus.add_element(ctl.clone()).await;
 
         ctl
-    }
-    fn get_gui_image(&self, ui: &mut Ui) -> TextureHandle{
-        let mut gui_image = self.gui_image.blocking_write();
-        if let Some(i) = &(*gui_image){
-            return i.clone();
-        }
-
-        let image = self.flir_image.blocking_read();
-        let rgb = image.as_rgb8().unwrap();
-        let pixels = rgb.as_flat_samples();
-        let size = [rgb.width() as usize, rgb.height() as usize];
-        let color_image = egui::ColorImage::from_rgb(size, pixels.as_slice());
-        let handle = ui.ctx().load_texture("Flir Output", color_image, Default::default());
-
-        *gui_image = Some(handle.clone());
-        handle
     }
     fn left_panel(&self, ui: &mut Ui){
         let mut menu = self.menu.blocking_write();
@@ -86,58 +83,6 @@ impl AfvController{
     fn render_main(&self, _ui: &mut Ui){
         
     }
-    fn render_flir_display(&self, ui: &mut Ui){
-        ui.horizontal(|ui|{
-            let mut decoder = self.flir_decoder.blocking_write();
-            match &mut (*decoder){
-                Some(_) => {
-                    if ui.button("Stop Flir Stream").clicked(){
-                        *decoder = None;
-                    }
-                },
-                None => {
-                    if ui.button("Start Flir Stream").clicked(){
-                        if let Ok(d) = Decoder::new(){
-                            *decoder = Some(d);
-                        }
-                    }
-                },
-            }
-        });
-        let texture = self.get_gui_image(ui);
-        ui.image(texture.id(), ui.available_size());
-    }
-    async fn process_nal_packet(self: Arc<Self>, packet: Vec<u8>){
-        let mut nal = Vec::with_capacity(packet.len());
-        to_bitstream_with_001_be::<u32>(&packet, &mut nal);
-        for packet in nal_units(&nal){
-            if let Some(d) = &mut (*self.flir_decoder.write().await){
-                if let Ok(Some(yuv)) = d.decode(&packet){
-                    let image_size = yuv.dimension_rgb();
-                    let mut rgb_data = vec![0; image_size.0*image_size.1*3];
-                    yuv.write_rgb8(&mut rgb_data);
-                    let image_data = match ImageBuffer::from_raw(
-                        image_size.0 as u32,
-                        image_size.1 as u32,
-                        rgb_data,
-                    ) {
-                        Some(i) => i,
-                        None => continue,
-                    };
-                    *self.flir_image.write().await = DynamicImage::ImageRgb8(image_data.clone());
-                    *self.gui_image.write().await = None;
-                }
-            }
-        }
-    }
-    async fn flir_stream_manager(self: Arc<Self>){
-        loop{
-            if let Some(_) = & (*self.flir_decoder.read().await){
-                self.bus.clone().send(self.bus_uuid, AfvCtlMessage::Network(NetworkMessages::FlirStream(*self.afv_uuid.read().await))).await;
-            }
-            sleep(tokio::time::Duration::from_secs(1)).await;
-        }
-    }
 }
 
 #[async_trait]
@@ -145,7 +90,7 @@ impl BusElement<AfvCtlMessage> for AfvController{
     async fn recieve(self: Arc<Self>, msg: AfvCtlMessage){
         if let AfvCtlMessage::Network(msg) = msg{
             match msg{
-                NetworkMessages::NalPacket(_, packet) => {
+                NetworkMessages::NalPacket(packet) => {
                     tokio::spawn(self.process_nal_packet(packet));
                 }
                 _ => {}
