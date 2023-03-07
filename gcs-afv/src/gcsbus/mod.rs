@@ -7,6 +7,7 @@ use eframe::{
     App,
 };
 
+
 use tokio::{
     runtime::Handle,
     sync::Mutex, time::Duration,
@@ -38,6 +39,8 @@ pub struct Gcs {
     bridge_finder: Arc<BridgeFinder>,
     afv_selector: Arc<AfvSelector>,
     afv_ctl: Arc<AfvController>,
+
+    
 }
 
 impl Gcs {
@@ -88,6 +91,7 @@ impl Gcs {
         let bridge_finder = BridgeFinder::new(bus.clone(), Duration::from_secs(2)).await;
         let afv_selector = AfvSelector::new(bus.clone()).await;
         let afv_ctl = AfvController::new(bus.clone()).await;
+
         Self {
             _handle: Handle::current(),
             bridge_finder: bridge_finder.clone(),

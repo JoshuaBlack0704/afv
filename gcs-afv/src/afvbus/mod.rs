@@ -5,7 +5,7 @@ use clap::Parser;
 use futures::StreamExt;
 use rand::{thread_rng, Rng};
 use retina::{client::{PlayOptions, SetupOptions, SessionOptions, self}, codec::CodecItem::VideoFrame};
-use tokio::{time::{sleep, Instant}, runtime::Handle, sync::RwLock};
+use tokio::{time::{sleep, Instant, Duration}, runtime::Handle, sync::RwLock};
 use url::Url;
 
 use crate::{bus::{Bus, BusUuid, BusElement}, networkbus::{networkbridge::NetworkBridge, scanner::ScanBuilder}, GCSBRIDGEPORT, messages::{AfvCtlMessage, NetworkMessages, LocalMessages}};
@@ -16,6 +16,7 @@ pub struct AfvArgs{
 }
 
 pub type AfvUuid = u16;
+pub const FLIR_TIME: Duration = Duration::from_secs(3);
 pub struct Simulated;
 pub struct Actuated;
 // pub const MINSTREAMINSTANTDIFF = 
@@ -53,7 +54,7 @@ impl Afv<Simulated>{
         bus.add_element(afv.clone()).await;
         
         loop{
-            sleep(tokio::time::Duration::from_secs(10)).await;
+            sleep(Duration::from_secs(10)).await;
         }
         
     }
@@ -92,7 +93,7 @@ impl Afv<Actuated>{
             bus.add_element(afv.clone()).await;
             
             loop{
-                sleep(tokio::time::Duration::from_secs(10)).await;
+                sleep(Duration::from_secs(10)).await;
             }
         });
     }
@@ -105,6 +106,7 @@ impl<T> Afv<T>{
         .scan_count(crate::networkbus::scanner::ScanCount::Infinite)
         .add_port(554)
         .dispatch();
+        println!("Started flir scan");
 
         // We will not go further until we have found a flir
         let flir_ip = match scan.recv_async().await{
@@ -174,37 +176,58 @@ impl<T> Afv<T>{
                 None => {continue;},
             }
 
-            if !Instant::now().duration_since(*self.flir_net_request.read().await).is_zero(){
+            if Instant::now().duration_since(*self.flir_net_request.read().await).is_zero(){
                 // The command instant has not passed, meaning we have charge to send a nal packet
-                self.bus.clone().send(self.bus_uuid, AfvCtlMessage::Network(NetworkMessages::NalPacket(frame.clone()))).await;
+                
+                self.bus.clone().send(self.bus_uuid, AfvCtlMessage::Network(NetworkMessages::NalPacket(self.afv_uuid, frame.clone()))).await;
             }
-            if !Instant::now().duration_since(*self.flir_local_request.read().await).is_zero(){
+            if Instant::now().duration_since(*self.flir_local_request.read().await).is_zero(){
                 // The command instant has not passed, meaning we have charge to send a nal packet
-                self.bus.clone().send(self.bus_uuid, AfvCtlMessage::Local(LocalMessages::NalPacket(frame))).await;
+                self.bus.clone().send(self.bus_uuid, AfvCtlMessage::Local(LocalMessages::NalPacket(self.afv_uuid, frame))).await;
             }
+        }
+    }
+    async fn flir_net_request(self: Arc<Self>){
+        if let Some(i) = Instant::now().checked_add(FLIR_TIME){
+            *self.flir_net_request.write().await = i;
+        }
+    }
+    async fn flir_local_request(self: Arc<Self>){
+        if let Some(i) = Instant::now().checked_add(FLIR_TIME){
+            *self.flir_local_request.write().await = i;
         }
     }
 }
 
 #[async_trait]
-impl<T: Send + Sync> BusElement<AfvCtlMessage> for Afv<T>{
+impl<T: Send + Sync + 'static> BusElement<AfvCtlMessage> for Afv<T>{
     async fn recieve(self: Arc<Self>, msg: AfvCtlMessage){
         if let AfvCtlMessage::Network(msg) = msg{
             match msg{
                 NetworkMessages::PollAfvUuid => {
                     // This message type is handled the same
                     tokio::spawn(
-                        match Instant::now().che
                         self.bus.clone().send(self.bus_uuid, AfvCtlMessage::Network(NetworkMessages::AfvUuid(self.afv_uuid)))
                     );
                 },
-                NetworkMessages::FlirStream => {
-                    tokio::spawn(async move {
-                        *self.flir_net_request.write() = Instant::
-                    });
+                NetworkMessages::FlirStream(afv_uuid) => {
+                    if self.afv_uuid != afv_uuid{return;}
+                    tokio::spawn(self.clone().flir_net_request());
+                },
+                _ => {}
+            }
+            return
+        }
+
+        if let AfvCtlMessage::Local(msg) = msg{
+            match msg{
+                LocalMessages::FlirStream(afv_uuid) => {
+                    if self.afv_uuid != afv_uuid{return;}
+                    tokio::spawn(self.clone().flir_local_request());
                 }
                 _ => {}
             }
+            return;
         }
         
     }
