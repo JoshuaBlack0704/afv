@@ -6,6 +6,8 @@ pub mod messages;
 
 pub mod networkbus;
 
+pub mod flirops;
+
 pub mod afvbus;
 
 pub mod gcsbus;

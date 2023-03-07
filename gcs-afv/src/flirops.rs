@@ -1,17 +1,63 @@
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 
-use eframe::{egui::{Ui, self, TopBottomPanel, CentralPanel, plot::{Points, Arrows, PlotImage, PlotPoint}}, epaint::{TextureHandle, Color32}};
+use async_trait::async_trait;
+use eframe::{epaint::{TextureHandle, Color32}, egui::{Ui, TopBottomPanel, self, CentralPanel, plot::{Points, Arrows, PlotImage, PlotPoint}}};
 use glam::Vec2;
-use image::{ImageBuffer, DynamicImage};
-use openh264::{to_bitstream_with_001_be, nal_units, decoder::Decoder};
-use tokio::time::sleep;
+use image::{DynamicImage, ImageBuffer};
+use openh264::{decoder::Decoder, to_bitstream_with_001_be, nal_units};
+use rand::{thread_rng, Rng};
+use tokio::{runtime::Handle, time::sleep, sync::RwLock};
 
-use crate::messages::{AfvCtlMessage, NetworkMessages};
+use crate::{bus::{BusUuid, Bus, BusElement}, afvbus::AfvUuid, messages::{AfvCtlMessage, NetworkMessages, LocalMessages}};
 
-use super::AfvController;
+const FLIRFOV: (f32, f32) = (29.0,22.0);
+pub struct Local;
+pub struct Network;
+pub struct FlirProcess<T>{
+    bus_uuid: BusUuid,
+    afv_uuid: RwLock<AfvUuid>,
+    bus: Bus<AfvCtlMessage>,
+    handle: Handle,
+    _net: PhantomData<T>,
+    
+    flir_decoder: RwLock<Option<Decoder>>,
+    flir_image: RwLock<DynamicImage>,
+    flir_filtered_image: RwLock<Option<DynamicImage>>,
+    flir_gui_image: RwLock<Option<TextureHandle>>,
+    flir_filter: RwLock<bool>,
+    flir_filter_level: RwLock<u8>,
+    flir_analysis_barrier: RwLock<bool>,
+    flir_centroids: RwLock<(Vec2, Vec2)>,
+    flir_target_iterations: RwLock<u32>,
+}
 
-impl AfvController{
-    pub (super) async fn flir_stream_manager(self: Arc<Self>){
+
+impl FlirProcess<Network>{
+    pub async fn new(bus: Bus<AfvCtlMessage>) -> Arc<Self> {
+        let flir = Arc::new(Self{
+            bus_uuid: thread_rng().gen(),
+            afv_uuid: Default::default(),
+            bus: bus.clone(),
+            handle: Handle::current(),
+            _net: PhantomData,
+            flir_decoder: Default::default(),
+            flir_image: RwLock::new(DynamicImage::new_rgb8(300,300)),
+            flir_gui_image: Default::default(),
+            flir_filtered_image: Default::default(),
+            flir_filter: Default::default(),
+            flir_filter_level: Default::default(),
+            flir_analysis_barrier: Default::default(),
+            flir_centroids: Default::default(),
+            flir_target_iterations: RwLock::new(2),
+        });
+
+        bus.add_element(flir.clone()).await;
+
+        tokio::spawn(flir.clone().flir_stream_manager());
+
+        flir
+    }
+    async fn flir_stream_manager(self: Arc<Self>){
         loop{
             if let Some(_) = & (*self.flir_decoder.read().await){
                 self.bus.clone().send(self.bus_uuid, AfvCtlMessage::Network(NetworkMessages::FlirStream(*self.afv_uuid.read().await))).await;
@@ -19,6 +65,45 @@ impl AfvController{
             sleep(tokio::time::Duration::from_secs(1)).await;
         }
     }
+}
+
+impl FlirProcess<Local>{
+    pub async fn new(bus: Bus<AfvCtlMessage>) -> Arc<Self> {
+        let flir = Arc::new(Self{
+            bus_uuid: thread_rng().gen(),
+            afv_uuid: Default::default(),
+            bus: bus.clone(),
+            handle: Handle::current(),
+            _net: PhantomData,
+            flir_decoder: Default::default(),
+            flir_image: RwLock::new(DynamicImage::new_rgb8(300,300)),
+            flir_gui_image: Default::default(),
+            flir_filtered_image: Default::default(),
+            flir_filter: Default::default(),
+            flir_filter_level: Default::default(),
+            flir_analysis_barrier: Default::default(),
+            flir_centroids: Default::default(),
+            flir_target_iterations: RwLock::new(2),
+        });
+
+        bus.add_element(flir.clone()).await;
+
+        tokio::spawn(flir.clone().flir_stream_manager());
+
+        flir
+    }
+    async fn flir_stream_manager(self: Arc<Self>){
+        loop{
+            if let Some(_) = & (*self.flir_decoder.read().await){
+                self.bus.clone().send(self.bus_uuid, AfvCtlMessage::Local(LocalMessages::FlirStream(*self.afv_uuid.read().await))).await;
+            }
+            sleep(tokio::time::Duration::from_secs(1)).await;
+        }
+    }
+}
+
+
+impl<T: Send + Sync + 'static> FlirProcess<T>{
     fn get_gui_image(&self, ui: &mut Ui) -> TextureHandle{
         let mut gui_image = self.flir_gui_image.blocking_write();
         if let Some(i) = &(*gui_image){
@@ -43,7 +128,7 @@ impl AfvController{
         *gui_image = Some(handle.clone());
         handle
     }
-    pub (super) fn render_flir_display(&self, ui: &mut Ui){
+    pub fn render_flir_display(&self, ui: &mut Ui){
         TopBottomPanel::top("Flir controls").show_inside(ui, |ui|{
             ui.horizontal(|ui|{
                 // Stream controls
@@ -96,9 +181,9 @@ impl AfvController{
                 ui.add(drag);
                 let mut filter_target_iterations = self.flir_target_iterations.blocking_write();
                 let drag = egui::widgets::DragValue::new(&mut (*filter_target_iterations))
-                    .clamp_range(0..=u8::MAX)
+                    .clamp_range(1..=5)
                     .prefix("Filter Target Iterations: ")
-                    .speed(1.0);
+                    .speed(0.1);
                 ui.add(drag);
                 if ui.button("Send filter level").clicked(){
                     self.handle.spawn(self.bus.clone().send(self.bus_uuid, AfvCtlMessage::Network(NetworkMessages::FlirFilterLevel(*filter_level))));
@@ -110,7 +195,7 @@ impl AfvController{
             self.plot_image(ui);
         });
     }
-    pub (super) fn plot_image(&self, ui: &mut Ui){
+    pub fn plot_image(&self, ui: &mut Ui){
         let texture = self.get_gui_image(ui);
         let gui_image_size = texture.size_vec2();
         let (lower_centroid, upper_centroid) = *self.flir_centroids.blocking_read();
@@ -141,7 +226,7 @@ impl AfvController{
         });
         
     }
-    pub (super) async fn process_nal_packet(self: Arc<Self>, packet: Vec<u8>){
+    async fn process_nal_packet(self: Arc<Self>, packet: Vec<u8>){
         if let Some(d) = &mut (*self.flir_decoder.write().await){
             let mut nal = Vec::with_capacity(packet.len());
             to_bitstream_with_001_be::<u32>(&packet, &mut nal);
@@ -238,5 +323,54 @@ impl AfvController{
             *self.flir_centroids.blocking_write() = (lower_centroid, upper_centroid);
             *self.flir_analysis_barrier.blocking_write() = false;
         });
+    }
+}
+
+#[async_trait]
+impl BusElement<AfvCtlMessage> for FlirProcess<Network>{
+    async fn recieve(self: Arc<Self>, msg: AfvCtlMessage){
+        if let AfvCtlMessage::Network(msg) = msg{
+            match msg{
+                NetworkMessages::NalPacket(packet) => {
+                    tokio::spawn(self.process_nal_packet(packet));
+                }
+                _ => {}
+            }
+            return;
+        }
+
+        
+        if let AfvCtlMessage::Local(msg) = msg{
+            match msg{
+                LocalMessages::SelectedAfv(uuid) => {
+                    *self.afv_uuid.write().await = uuid;
+                },
+                _ => {}
+            }
+            return;
+        }
+    }
+    fn uuid(&self) -> BusUuid{
+        self.bus_uuid
+    }
+}
+#[async_trait]
+impl BusElement<AfvCtlMessage> for FlirProcess<Local>{
+    async fn recieve(self: Arc<Self>, msg: AfvCtlMessage){
+        if let AfvCtlMessage::Local(msg) = msg{
+            match msg{
+                LocalMessages::SelectedAfv(uuid) => {
+                    *self.afv_uuid.write().await = uuid;
+                },
+                LocalMessages::NalPacket(packet) => {
+                    tokio::spawn(self.process_nal_packet(packet));
+                }
+                _ => {}
+            }
+            return;
+        }
+    }
+    fn uuid(&self) -> BusUuid{
+        self.bus_uuid
     }
 }
