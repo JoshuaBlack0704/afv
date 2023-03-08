@@ -8,7 +8,7 @@ use rand::{thread_rng, Rng};
 use tokio::{time::{sleep, Instant, Duration}, runtime::Handle, sync::RwLock};
 
 
-use crate::{bus::{Bus, BusUuid, BusElement}, networkbus::networkbridge::NetworkBridge, GCSBRIDGEPORT, messages::{AfvCtlMessage, NetworkMessages, LocalMessages}};
+use crate::{bus::{Bus, BusUuid, BusElement}, networkbus::networkbridge::NetworkBridge, GCSBRIDGEPORT, messages::{AfvCtlMessage, NetworkMessages, LocalMessages}, flirops::{FlirController, Local}};
 
 mod flir;
 
@@ -33,6 +33,9 @@ pub struct Afv<SimType>{
     // Flir fields
     flir_net_request: RwLock<Instant>,
     flir_local_request: RwLock<Instant>,
+
+    //flir
+    flir: Arc<FlirController<Local>>,
 }
 
 impl Afv<Simulated>{
@@ -41,6 +44,7 @@ impl Afv<Simulated>{
         println!("Afv listening on port {}", GCSBRIDGEPORT);
         NetworkBridge::server(&bus, GCSBRIDGEPORT).await;
         println!("Afv connected on port {}", GCSBRIDGEPORT);
+        let flir = FlirController::<Local>::new(bus.clone()).await;
         let afv:Arc<Afv<Simulated>> = Arc::new(Afv{
             bus_uuid: thread_rng().gen(),
             afv_uuid: thread_rng().gen(),
@@ -49,6 +53,7 @@ impl Afv<Simulated>{
             _sim: PhantomData,
             flir_net_request: RwLock::new(Instant::now()),
             flir_local_request: RwLock::new(Instant::now()),
+            flir,
         });
         
         tokio::spawn(afv.clone().stream_flir());
@@ -88,6 +93,7 @@ impl Afv<Actuated>{
                 _sim: PhantomData,
                 flir_net_request: RwLock::new(Instant::now()),
                 flir_local_request: RwLock::new(Instant::now()),
+                flir: FlirController::<Local>::new(bus.clone()).await,
             });
 
             tokio::spawn(afv.clone().stream_flir());

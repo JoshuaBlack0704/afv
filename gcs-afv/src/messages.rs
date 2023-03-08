@@ -10,8 +10,15 @@ pub enum NetworkMessages{
     FlirStream(AfvUuid),
     #[serde(with = "serde_bytes")]
     NalPacket(Vec<u8>),
-    FlirFilterLevel(u8),
-    FlirTargetIterations(u32),
+    FlirFilterLevel(AfvUuid, u8),
+    FlirTargetIterations(AfvUuid, u32),
+    PollFlirAngle(AfvUuid),
+    PollDistance(AfvUuid),
+    FlirAngle(AfvUuid, f32, f32),
+    Distance(AfvUuid, f32),
+    PollFiringSolution(AfvUuid),
+    /// This is only sent from the ground station
+    AutoTarget(AfvUuid),
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum LocalMessages{
@@ -19,8 +26,13 @@ pub enum LocalMessages{
     FlirStream(AfvUuid),
     #[serde(with = "serde_bytes")]
     NalPacket(Vec<u8>),
-    FlirFilterLevel(u32),
-    FlirTargetIterations(u32),
+    FlirFilterLevel(AfvUuid, u8),
+    FlirTargetIterations(AfvUuid, u32),
+    PollFlirAngle(AfvUuid),
+    PollDistance(AfvUuid),
+    FlirAngle(AfvUuid, f32, f32),
+    Distance(AfvUuid, f32),
+    PollFiringSolution(AfvUuid),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

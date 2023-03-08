@@ -13,7 +13,7 @@ use crate::{bus::{BusUuid, Bus, BusElement}, afvbus::AfvUuid, messages::{AfvCtlM
 const FLIRFOV: (f32, f32) = (29.0,22.0);
 pub struct Local;
 pub struct Network;
-pub struct FlirProcess<T>{
+pub struct FlirController<T>{
     bus_uuid: BusUuid,
     afv_uuid: RwLock<AfvUuid>,
     bus: Bus<AfvCtlMessage>,
@@ -32,7 +32,7 @@ pub struct FlirProcess<T>{
 }
 
 
-impl FlirProcess<Network>{
+impl FlirController<Network>{
     pub async fn new(bus: Bus<AfvCtlMessage>) -> Arc<Self> {
         let flir = Arc::new(Self{
             bus_uuid: thread_rng().gen(),
@@ -67,7 +67,7 @@ impl FlirProcess<Network>{
     }
 }
 
-impl FlirProcess<Local>{
+impl FlirController<Local>{
     pub async fn new(bus: Bus<AfvCtlMessage>) -> Arc<Self> {
         let flir = Arc::new(Self{
             bus_uuid: thread_rng().gen(),
@@ -103,7 +103,25 @@ impl FlirProcess<Local>{
 }
 
 
-impl<T: Send + Sync + 'static> FlirProcess<T>{
+impl<T: Send + Sync + 'static> FlirController<T>{
+    /// Returns the angle delta in degrees needed to center on the target centroid
+    pub async fn get_target_offset(&self) -> (f32, f32){
+        let target_centroid = self.flir_centroids.read().await.1;
+        let image_width = self.flir_image.read().await.width();
+        let image_height = self.flir_image.read().await.height();
+        let center = Vec2::new((image_width as f32) / 2.0, (image_height as f32) / 2.0);
+        let delta_pix = ( target_centroid - center) * Vec2::new(1.0, -1.0);
+        let deg_pix_x = FLIRFOV.0 / image_width as f32;
+        let deg_pix_y = FLIRFOV.1 / image_height as f32;
+
+        let delta_x = delta_pix.x * deg_pix_x;
+        let delta_y = delta_pix.y * deg_pix_y;
+
+        (delta_x, delta_y)
+    }
+    pub fn get_target_offset_blocking(&self) -> (f32, f32) {
+        self.handle.block_on(self.get_target_offset())
+    }
     fn get_gui_image(&self, ui: &mut Ui) -> TextureHandle{
         let mut gui_image = self.flir_gui_image.blocking_write();
         if let Some(i) = &(*gui_image){
@@ -186,8 +204,8 @@ impl<T: Send + Sync + 'static> FlirProcess<T>{
                     .speed(0.1);
                 ui.add(drag);
                 if ui.button("Send filter level").clicked(){
-                    self.handle.spawn(self.bus.clone().send(self.bus_uuid, AfvCtlMessage::Network(NetworkMessages::FlirFilterLevel(*filter_level))));
-                    self.handle.spawn(self.bus.clone().send(self.bus_uuid, AfvCtlMessage::Network(NetworkMessages::FlirTargetIterations(*filter_target_iterations))));
+                    self.handle.spawn(self.bus.clone().send(self.bus_uuid, AfvCtlMessage::Network(NetworkMessages::FlirFilterLevel(*self.afv_uuid.blocking_read(), *filter_level))));
+                    self.handle.spawn(self.bus.clone().send(self.bus_uuid, AfvCtlMessage::Network(NetworkMessages::FlirTargetIterations(*self.afv_uuid.blocking_read(), *filter_target_iterations))));
                 }
             });
         });
@@ -207,9 +225,18 @@ impl<T: Send + Sync + 'static> FlirProcess<T>{
         .filled(true)
         .radius(5.0)
         .name("Centroids");
-        let arrow = Arrows::new(vec![upper_centroid], vec![lower_centroid])
+        let centroidal_arrow = Arrows::new(vec![upper_centroid], vec![lower_centroid])
         .color(Color32::RED)
         .name("Fire Axis");
+
+        let delta_angles = self.get_target_offset_blocking();
+        println!("{}", delta_angles.1);
+        let center = [gui_image_size.x as f64 / 2.0, -gui_image_size.y as f64 / 2.0];
+        let rot_x = [(gui_image_size.x + 5.0 * delta_angles.0) as f64 / 2.0, -gui_image_size.y as f64 / 2.0];
+        let rot_y = [gui_image_size.x as f64 / 2.0, (-gui_image_size.y + 5.0 * delta_angles.1) as f64 / 2.0];
+        let rotation_arrow = Arrows::new(vec![center, center], vec![rot_x, rot_y])
+        .color(Color32::GOLD)
+        .name("Rotation Arrow");
         
         egui::widgets::plot::Plot::new("Flir plot")
             .show_background(false)
@@ -222,7 +249,8 @@ impl<T: Send + Sync + 'static> FlirProcess<T>{
             let image = PlotImage::new(texture.id(), PlotPoint::new(gui_image_size.x/2.0,-gui_image_size.y/2.0), gui_image_size);
             ui.image(image);
             ui.points(points);
-            ui.arrows(arrow);
+            ui.arrows(centroidal_arrow);
+            ui.arrows(rotation_arrow);
         });
         
     }
@@ -261,12 +289,10 @@ impl<T: Send + Sync + 'static> FlirProcess<T>{
             {
                 let mut barrier = self.flir_analysis_barrier.blocking_write();
                 if *barrier{
-                    println!("NOT Analyizing image");
                     return;
                 }
                 *barrier = true;
             }
-            println!("Analyizing image");
 
             // Pull in our image
             let image = self.flir_image.blocking_read().clone().into_rgb8();
@@ -327,7 +353,7 @@ impl<T: Send + Sync + 'static> FlirProcess<T>{
 }
 
 #[async_trait]
-impl BusElement<AfvCtlMessage> for FlirProcess<Network>{
+impl BusElement<AfvCtlMessage> for FlirController<Network>{
     async fn recieve(self: Arc<Self>, msg: AfvCtlMessage){
         if let AfvCtlMessage::Network(msg) = msg{
             match msg{
@@ -355,7 +381,7 @@ impl BusElement<AfvCtlMessage> for FlirProcess<Network>{
     }
 }
 #[async_trait]
-impl BusElement<AfvCtlMessage> for FlirProcess<Local>{
+impl BusElement<AfvCtlMessage> for FlirController<Local>{
     async fn recieve(self: Arc<Self>, msg: AfvCtlMessage){
         if let AfvCtlMessage::Local(msg) = msg{
             match msg{

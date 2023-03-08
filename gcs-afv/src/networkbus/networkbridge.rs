@@ -92,6 +92,42 @@ impl NetworkBridge{
 
     async fn forward(self: Arc<Self>, msg: AfvCtlMessage){
         // println!("Forwarding message {:?}", msg);
+        if let Some(afv_uuid) = *self.afv_uuid.read().await{
+            if let AfvCtlMessage::Network(msg) = msg.clone(){
+                match msg{
+                    NetworkMessages::FlirStream(uuid) => {
+                        if uuid != afv_uuid{return}
+                    },
+                    NetworkMessages::FlirFilterLevel(uuid, _) => {
+                        if uuid != afv_uuid{return}
+                    },
+                    NetworkMessages::FlirTargetIterations(uuid, _) => {
+                        if uuid != afv_uuid{return}
+                    },
+                    NetworkMessages::PollFlirAngle(uuid) => {
+                        if uuid != afv_uuid{return}
+                    },
+                    NetworkMessages::PollDistance(uuid) => {
+                        if uuid != afv_uuid{return}
+                    },
+                    NetworkMessages::FlirAngle(uuid, _, _) => {
+                        if uuid != afv_uuid{return}
+                    },
+                    NetworkMessages::Distance(uuid, _) => {
+                        if uuid != afv_uuid{return}
+                    },
+                    NetworkMessages::PollFiringSolution(uuid) => {
+                        if uuid != afv_uuid{return}
+                    },
+                    NetworkMessages::AutoTarget(uuid) => {
+                        if uuid != afv_uuid{return}
+                    },
+                    NetworkMessages::PollAfvUuid => {},
+                    NetworkMessages::AfvUuid(_) => {},
+                    NetworkMessages::NalPacket(_) => {},
+                }
+            }
+        }
         if let Ok(msg) = bincode::serialize(&msg){
             let _ = self.write.lock().await.write(&msg).await;
         }

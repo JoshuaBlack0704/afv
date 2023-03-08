@@ -8,6 +8,14 @@ pub mod networkbus;
 
 pub mod flirops;
 
+pub mod targetops;
+
+pub mod flirturret;
+
+pub mod distancesensor;
+
+pub mod nozzleturret;
+
 pub mod afvbus;
 
 pub mod gcsbus;

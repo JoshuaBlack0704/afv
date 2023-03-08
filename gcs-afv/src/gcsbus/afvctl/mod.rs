@@ -8,7 +8,7 @@ use eframe::egui::{Ui, self};
 use rand::{thread_rng, Rng};
 use tokio::{runtime::Handle, sync::RwLock};
 
-use crate::{bus::{Bus, BusUuid, BusElement}, afvbus::AfvUuid, messages::{AfvCtlMessage, LocalMessages}, flirops::{FlirProcess, Network}};
+use crate::{bus::{Bus, BusUuid, BusElement}, afvbus::AfvUuid, messages::{AfvCtlMessage, LocalMessages}, flirops::{FlirController, Network}};
 
 use super::Renderable;
 
@@ -28,7 +28,7 @@ pub struct AfvController{
     menu: RwLock<MenuTypes>,
 
     // Flir
-    flir: Arc<FlirProcess<Network>>,
+    flir: Arc<FlirController<Network>>,
 }
 
 impl AfvController{
@@ -39,7 +39,7 @@ impl AfvController{
             handle: Handle::current(),
             afv_uuid: Default::default(),
             menu: RwLock::new(MenuTypes::Main),
-            flir: FlirProcess::<Network>::new(bus.clone()).await,
+            flir: FlirController::<Network>::new(bus.clone()).await,
         });
 
         bus.add_element(ctl.clone()).await;
