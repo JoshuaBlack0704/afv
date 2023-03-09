@@ -28,11 +28,6 @@ pub enum LocalMessages{
     NalPacket(Vec<u8>),
     FlirFilterLevel(AfvUuid, u8),
     FlirTargetIterations(AfvUuid, u32),
-    PollFlirAngle(AfvUuid),
-    PollDistance(AfvUuid),
-    FlirAngle(AfvUuid, f32, f32),
-    Distance(AfvUuid, f32),
-    PollFiringSolution(AfvUuid),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

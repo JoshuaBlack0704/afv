@@ -8,7 +8,7 @@ use rand::{thread_rng, Rng};
 use tokio::{time::{sleep, Instant, Duration}, runtime::Handle, sync::RwLock};
 
 
-use crate::{bus::{Bus, BusUuid, BusElement}, networkbus::networkbridge::NetworkBridge, GCSBRIDGEPORT, messages::{AfvCtlMessage, NetworkMessages, LocalMessages}, flirops::{FlirController, Local}};
+use crate::{bus::{Bus, BusUuid, BusElement}, networkbus::{networkbridge::NetworkBridge, Local}, GCSBRIDGEPORT, messages::{AfvCtlMessage, NetworkMessages, LocalMessages}, flirops::FlirController};
 
 mod flir;
 

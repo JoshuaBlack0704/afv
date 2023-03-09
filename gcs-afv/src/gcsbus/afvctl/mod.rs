@@ -8,7 +8,7 @@ use eframe::egui::{Ui, self};
 use rand::{thread_rng, Rng};
 use tokio::{runtime::Handle, sync::RwLock};
 
-use crate::{bus::{Bus, BusUuid, BusElement}, afvbus::AfvUuid, messages::{AfvCtlMessage, LocalMessages}, flirops::{FlirController, Network}};
+use crate::{bus::{Bus, BusUuid, BusElement}, afvbus::AfvUuid, messages::{AfvCtlMessage, LocalMessages}, flirops::FlirController, networkbus::Network, flirturret::FlirTurret, distancesensor::DistanceSensor, nozzleturret::NozzleTurret, targetops::TargetingComputer};
 
 use super::Renderable;
 
@@ -27,19 +27,35 @@ pub struct AfvController{
     //Current menu
     menu: RwLock<MenuTypes>,
 
-    // Flir
     flir: Arc<FlirController<Network>>,
+    flir_turret: Arc<FlirTurret<Network>>,
+    distance_sensor: Arc<DistanceSensor<Network>>,
+    nozzle_turret: Arc<NozzleTurret<Network>>,
+    targeting_comp: Arc<TargetingComputer<Network>>,
+    
 }
 
 impl AfvController{
     pub async fn new(bus: Bus<AfvCtlMessage>) -> Arc<AfvController> {
+
+        let flir = FlirController::<Network>::new(bus.clone()).await;
+        let flir_turret = FlirTurret::<Network>::new().await;
+        let distance_sensor: 
+
+
+
+        
         let ctl = Arc::new(Self{
             bus_uuid: thread_rng().gen(),
             bus: bus.clone(),
             handle: Handle::current(),
             afv_uuid: Default::default(),
             menu: RwLock::new(MenuTypes::Main),
-            flir: FlirController::<Network>::new(bus.clone()).await,
+            flir,
+            flir_turret: todo!(),
+            distance_sensor: todo!(),
+            nozzle_turret: todo!(),
+            targeting_comp: todo!(),
         });
 
         bus.add_element(ctl.clone()).await;

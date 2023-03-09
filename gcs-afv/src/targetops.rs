@@ -1,150 +1,184 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use async_trait::async_trait;
+use eframe::egui::Ui;
 use rand::{thread_rng, Rng};
-use tokio::{sync::RwLock, runtime::Handle, time::{Instant, Duration}};
+use tokio::time::{sleep, Duration, Instant};
+use tokio::{runtime::Handle, sync::RwLock};
 
-use crate::{bus::{BusUuid, Bus, BusElement}, afvbus::AfvUuid, messages::{AfvCtlMessage, NetworkMessages, LocalMessages}};
+use crate::bus::BusElement;
+use crate::messages::{NetworkMessages, LocalMessages};
+use crate::networkbus::Local;
+use crate::nozzleturret::NozzleTurret;
+use crate::{
+    afvbus::AfvUuid,
+    bus::{Bus, BusUuid},
+    distancesensor::DistanceSensor,
+    flirops::FlirController,
+    flirturret::FlirTurret,
+    messages::AfvCtlMessage,
+    networkbus::Network,
+};
 
-pub const AUTO_TARGET_TIME: Duration = Duration::from_secs(3);
-pub struct Local;
-pub struct Network;
-pub struct TargetComputer<T>{
+const AUTOTARGETWAITTIME: Duration = Duration::from_secs(3);
+const AUTOTARGETREQUESTTIME: Duration = Duration::from_secs(3);
+pub struct TargetingComputer<NetType> {
     bus_uuid: BusUuid,
     afv_uuid: RwLock<AfvUuid>,
     bus: Bus<AfvCtlMessage>,
     handle: Handle,
-    _net: PhantomData<T>,
-    
-    flir_angle: RwLock<Option<(f32, f32)>>,
-    distance: RwLock<Option<f32>>,
 
-    nozzle_angle: RwLock<(f32, f32)>,
+    flir: Arc<FlirController<NetType>>,
+    flir_turret: Arc<FlirTurret<NetType>>,
+    nozzle_turret: Arc<NozzleTurret<NetType>>,
+    distance_sensor: Arc<DistanceSensor<NetType>>,
+    _net: PhantomData<NetType>,
 
+    auto_target: RwLock<bool>,
     auto_target_request: RwLock<Instant>,
 }
 
-impl TargetComputer<Local>{
-    pub async fn new(bus: Bus<AfvCtlMessage>) -> Arc<Self> {
-        let comp = Arc::new(Self{
+impl TargetingComputer<Network> {
+    pub async fn new(
+        bus: Bus<AfvCtlMessage>,
+        flir: Arc<FlirController<Network>>,
+        flir_turret: Arc<FlirTurret<Network>>,
+        nozzle_turret: Arc<NozzleTurret<Network>>,
+        distance_sensor: Arc<DistanceSensor<Network>>,
+    ) -> Arc<Self> {
+        let comp = Arc::new(Self {
             bus_uuid: thread_rng().gen(),
             afv_uuid: Default::default(),
             bus: bus.clone(),
             handle: Handle::current(),
+            flir,
+            flir_turret,
+            nozzle_turret,
+            distance_sensor,
             _net: PhantomData,
-            flir_angle: Default::default(),
-            distance: Default::default(),
-            nozzle_angle: Default::default(),
+            auto_target: Default::default(),
             auto_target_request: RwLock::new(Instant::now()),
         });
 
-        bus.add_element(comp.clone()).await;
+        tokio::spawn(comp.clone().auto_target_task());
 
         comp
-        
     }
-    async fn poll_data(self: Arc<Self>){
-        *self.flir_angle.write().await = None;
-        *self.distance.write().await = None;
-        self.bus.clone().send(self.bus_uuid, AfvCtlMessage::Local(LocalMessages::PollFlirAngle(*self.afv_uuid.read().await))).await;
-        self.bus.clone().send(self.bus_uuid, AfvCtlMessage::Local(LocalMessages::PollDistance(*self.afv_uuid.read().await))).await;
+
+    pub fn auto_target_state(&self) -> bool {
+        *self.auto_target.blocking_read()
+    }
+    pub fn auto_target_button(&self, ui: &mut Ui) {
+        let mut auto_target = self.auto_target.blocking_write();
+        if ui
+            .selectable_label(*auto_target, "Auto Targeting")
+            .clicked()
+        {
+            *auto_target = !*auto_target;
+        }
+    }
+
+    async fn auto_target_task(self: Arc<Self>) {
+        loop {
+            sleep(AUTOTARGETWAITTIME).await;
+            if !*self.auto_target.read().await {
+                continue;
+            }
+
+            // Auto targeting must be enabled
+
+            self.bus
+                .clone()
+                .send(
+                    self.bus_uuid,
+                    AfvCtlMessage::Network(NetworkMessages::AutoTarget(
+                        *self.afv_uuid.read().await,
+                    )),
+                )
+                .await;
+        }
     }
 }
 
-impl TargetComputer<Network>{
-    pub async fn new(bus: Bus<AfvCtlMessage>) -> Arc<Self> {
-        let comp = Arc::new(Self{
+impl TargetingComputer<Local>{
+    pub async fn new(
+        bus: Bus<AfvCtlMessage>,
+        flir: Arc<FlirController<Local>>,
+        flir_turret: Arc<FlirTurret<Local>>,
+        nozzle_turret: Arc<NozzleTurret<Local>>,
+        distance_sensor: Arc<DistanceSensor<Local>>,
+    ) -> Arc<Self> {
+        let comp = Arc::new(Self {
             bus_uuid: thread_rng().gen(),
             afv_uuid: Default::default(),
             bus: bus.clone(),
             handle: Handle::current(),
+            flir,
+            flir_turret,
+            nozzle_turret,
+            distance_sensor,
             _net: PhantomData,
-            flir_angle: Default::default(),
-            distance: Default::default(),
-            nozzle_angle: Default::default(),
+            auto_target: Default::default(),
             auto_target_request: RwLock::new(Instant::now()),
         });
 
-        bus.add_element(comp.clone()).await;
+        tokio::spawn(comp.clone().auto_target_task());
 
         comp
-        
     }
-    async fn poll_data(self: Arc<Self>){
-        *self.flir_angle.write().await = None;
-        *self.distance.write().await = None;
-        self.bus.clone().send(self.bus_uuid, AfvCtlMessage::Network(NetworkMessages::PollFlirAngle(*self.afv_uuid.read().await))).await;
-        self.bus.clone().send(self.bus_uuid, AfvCtlMessage::Network(NetworkMessages::PollDistance(*self.afv_uuid.read().await))).await;
-    }
-}
-
-impl<T> TargetComputer<T>{
-    pub async fn set_flir_angle(&self, angle: (f32,f32)){
-        *self.flir_angle.write().await = Some(angle);
-
-        self.attempt_solution().await;
-    }
-    pub async fn set_distance(&self, distance: f32){
-        *self.distance.write().await = Some(distance);
-        
-        self.attempt_solution().await;
-    }
-    pub async fn attempt_solution(&self){
-        let angle = match *self.flir_angle.read().await{
-            Some(a) => a,
-            None => return,
-        };
-        let distance = match *self.distance.read().await{
-            Some(d) => d,
-            None => return,
-        };
-
-        // TODO: Develop and send firing solution
-
-
-
-        *self.flir_angle.write().await = None;
-        *self.distance.write().await = None;
-    }
-}
-
-
-/// This variant is spawned on the AFV
-#[async_trait]
-impl BusElement<AfvCtlMessage> for TargetComputer<Local>{
-    async fn recieve(self: Arc<Self>, msg: AfvCtlMessage){
-        if let AfvCtlMessage::Local(msg) = msg{
-            match msg{
-                LocalMessages::SelectedAfv(uuid) => *self.afv_uuid.write().await = uuid,
-                LocalMessages::FlirAngle(_, _, _) => todo!(),
-                LocalMessages::Distance(_, _) => todo!(),
-                LocalMessages::PollFiringSolution(uuid) => {
-                    if !uuid == *self.afv_uuid.read().await{return}
-                    tokio::spawn(self.poll_data());
-                    
-                },
-                 _ => {}
+    async fn auto_target_task(self: Arc<Self>) {
+        loop {
+            sleep(AUTOTARGETWAITTIME).await;
+            if !*self.auto_target.read().await {
+                continue;
             }
-            return;
+
+            // Auto targeting must be enabled
+
+            self.bus
+                .clone()
+                .send(
+                    self.bus_uuid,
+                    AfvCtlMessage::Network(NetworkMessages::AutoTarget(
+                        *self.afv_uuid.read().await,
+                    )),
+                )
+                .await;
         }
     }
-    fn uuid(&self) -> BusUuid{
-        self.bus_uuid
-    }
+
 }
 
-/// This variant is spawned on the control station
 #[async_trait]
-impl BusElement<AfvCtlMessage> for TargetComputer<Network>{
+impl<T: Send + Sync + 'static> BusElement<AfvCtlMessage> for TargetingComputer<T>{
     async fn recieve(self: Arc<Self>, msg: AfvCtlMessage){
-        if let AfvCtlMessage::Local(msg) = msg{
-            if let LocalMessages::PollFiringSolution(uuid) = msg{
-                if !uuid == *self.afv_uuid.read().await{return}
-                tokio::spawn(self.poll_data());
-            }
-            
-            return;
+        match msg{
+            AfvCtlMessage::Network(msg) => {
+                match msg{
+                    NetworkMessages::AutoTarget(afv_uuid) => {
+                        if afv_uuid != *self.afv_uuid.read().await{return}
+
+                        tokio::spawn(async move{
+                            if let Some(i) = Instant::now().checked_add(AUTOTARGETREQUESTTIME){
+                                *self.auto_target_request.write().await = i;
+                            }
+                        });
+                        
+                    },
+                    _ => {}
+                }
+            },
+            AfvCtlMessage::Local(msg) => {
+                match msg{
+                    LocalMessages::SelectedAfv(afv_uuid) => {
+                        *self.afv_uuid.write().await = afv_uuid;
+                    },
+                    _ => {}
+                }
+            },
         }
+
+        
     }
     fn uuid(&self) -> BusUuid{
         self.bus_uuid
