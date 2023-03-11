@@ -122,6 +122,9 @@ impl NetworkBridge{
                     NetworkMessages::AutoTarget(uuid) => {
                         if uuid != afv_uuid{return}
                     },
+                    NetworkMessages::AutoAim(uuid) => {
+                        if uuid != afv_uuid{return}
+                    },
                     NetworkMessages::PollAfvUuid => {},
                     NetworkMessages::AfvUuid(_) => {},
                     NetworkMessages::NalPacket(_) => {},

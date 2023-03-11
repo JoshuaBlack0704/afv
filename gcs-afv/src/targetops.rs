@@ -20,8 +20,10 @@ use crate::{
     networkbus::Network,
 };
 
-const AUTOTARGETWAITTIME: Duration = Duration::from_secs(3);
-const AUTOTARGETREQUESTTIME: Duration = Duration::from_secs(3);
+const AUTO_TARGET_WAIT_TIME: Duration = Duration::from_secs(1);
+const AUTO_TARGET_REQUEST_TIME: Duration = Duration::from_secs(3);
+const AUTO_AIM_WAIT_TIME: Duration = Duration::from_secs(1);
+const AUTO_AIM_REQUEST_TIME: Duration = Duration::from_secs(3);
 pub struct TargetingComputer<NetType> {
     bus_uuid: BusUuid,
     afv_uuid: RwLock<AfvUuid>,
@@ -36,6 +38,7 @@ pub struct TargetingComputer<NetType> {
 
     auto_target: RwLock<bool>,
     auto_target_request: RwLock<Instant>,
+    auto_aim_request: RwLock<Instant>,
 }
 
 impl TargetingComputer<Network> {
@@ -58,9 +61,12 @@ impl TargetingComputer<Network> {
             _net: PhantomData,
             auto_target: Default::default(),
             auto_target_request: RwLock::new(Instant::now()),
+            auto_aim_request: RwLock::new(Instant::now()),
         });
 
         tokio::spawn(comp.clone().auto_target_task());
+        
+        bus.add_element(comp.clone()).await;
 
         comp
     }
@@ -80,12 +86,13 @@ impl TargetingComputer<Network> {
 
     async fn auto_target_task(self: Arc<Self>) {
         loop {
-            sleep(AUTOTARGETWAITTIME).await;
+            sleep(AUTO_TARGET_WAIT_TIME).await;
             if !*self.auto_target.read().await {
                 continue;
             }
 
             // Auto targeting must be enabled
+            println!("Sending auto target command");
 
             self.bus
                 .clone()
@@ -120,30 +127,23 @@ impl TargetingComputer<Local>{
             _net: PhantomData,
             auto_target: Default::default(),
             auto_target_request: RwLock::new(Instant::now()),
+            auto_aim_request: RwLock::new(Instant::now()),
         });
 
         tokio::spawn(comp.clone().auto_target_task());
+
+        bus.add_element(comp.clone()).await;
 
         comp
     }
     async fn auto_target_task(self: Arc<Self>) {
         loop {
-            sleep(AUTOTARGETWAITTIME).await;
-            if !*self.auto_target.read().await {
+            sleep(AUTO_TARGET_WAIT_TIME).await;
+            if !Instant::now().duration_since(*self.auto_target_request.read().await).is_zero() {
                 continue;
             }
-
-            // Auto targeting must be enabled
-
-            self.bus
-                .clone()
-                .send(
-                    self.bus_uuid,
-                    AfvCtlMessage::Network(NetworkMessages::AutoTarget(
-                        *self.afv_uuid.read().await,
-                    )),
-                )
-                .await;
+            println!("Auto target enabled");
+            self.flir_turret.adjust_angle(self.flir.get_target_offset().await).await;
         }
     }
 
@@ -159,12 +159,22 @@ impl<T: Send + Sync + 'static> BusElement<AfvCtlMessage> for TargetingComputer<T
                         if afv_uuid != *self.afv_uuid.read().await{return}
 
                         tokio::spawn(async move{
-                            if let Some(i) = Instant::now().checked_add(AUTOTARGETREQUESTTIME){
+                            if let Some(i) = Instant::now().checked_add(AUTO_TARGET_REQUEST_TIME){
                                 *self.auto_target_request.write().await = i;
                             }
                         });
                         
                     },
+                    NetworkMessages::AutoAim(afv_uuid) => {
+                        if afv_uuid != *self.afv_uuid.read().await{return}
+                        
+                        tokio::spawn(async move{
+                            if let Some(i) = Instant::now().checked_add(AUTO_AIM_REQUEST_TIME){
+                                *self.auto_aim_request.write().await = i;
+                            }
+                        });
+                        
+                    }
                     _ => {}
                 }
             },

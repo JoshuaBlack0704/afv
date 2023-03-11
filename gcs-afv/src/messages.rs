@@ -19,6 +19,7 @@ pub enum NetworkMessages{
     PollFiringSolution(AfvUuid),
     /// This is only sent from the ground station
     AutoTarget(AfvUuid),
+    AutoAim(AfvUuid),
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum LocalMessages{

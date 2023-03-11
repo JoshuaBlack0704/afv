@@ -5,7 +5,7 @@ pub struct NozzleTurret<NetType>{
 }
 
 impl<T> NozzleTurret<T>{
-    pub fn new() -> Arc<Self> {
+    pub async fn new() -> Arc<Self> {
         Arc::new(Self{
             _net: PhantomData,
         })

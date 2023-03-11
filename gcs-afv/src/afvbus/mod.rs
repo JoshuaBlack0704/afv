@@ -8,7 +8,7 @@ use rand::{thread_rng, Rng};
 use tokio::{time::{sleep, Instant, Duration}, runtime::Handle, sync::RwLock};
 
 
-use crate::{bus::{Bus, BusUuid, BusElement}, networkbus::{networkbridge::NetworkBridge, Local}, GCSBRIDGEPORT, messages::{AfvCtlMessage, NetworkMessages, LocalMessages}, flirops::FlirController};
+use crate::{bus::{Bus, BusUuid, BusElement}, networkbus::{networkbridge::NetworkBridge, Local}, GCSBRIDGEPORT, messages::{AfvCtlMessage, NetworkMessages, LocalMessages}, flirops::FlirController, flirturret::FlirTurret, nozzleturret::NozzleTurret, distancesensor::DistanceSensor, targetops::TargetingComputer};
 
 mod flir;
 
@@ -36,6 +36,10 @@ pub struct Afv<SimType>{
 
     //flir
     flir: Arc<FlirController<Local>>,
+    flir_turret: Arc<FlirTurret<Local>>,
+    distance_sensor: Arc<DistanceSensor<Local>>,
+    nozzle_turret: Arc<NozzleTurret<Local>>,
+    targeting_comp: Arc<TargetingComputer<Local>>,
 }
 
 impl Afv<Simulated>{
@@ -45,6 +49,11 @@ impl Afv<Simulated>{
         NetworkBridge::server(&bus, GCSBRIDGEPORT).await;
         println!("Afv connected on port {}", GCSBRIDGEPORT);
         let flir = FlirController::<Local>::new(bus.clone()).await;
+        let flir_turret = FlirTurret::<Local>::new().await;
+        let nozzle_turret = NozzleTurret::<Local>::new().await;
+        let distance_sensor = DistanceSensor::<Local>::new().await; 
+        let targeting_comp = TargetingComputer::<Local>::new(bus.clone(), flir.clone(), flir_turret.clone(), nozzle_turret.clone(), distance_sensor.clone()).await;
+
         let afv:Arc<Afv<Simulated>> = Arc::new(Afv{
             bus_uuid: thread_rng().gen(),
             afv_uuid: thread_rng().gen(),
@@ -54,11 +63,17 @@ impl Afv<Simulated>{
             flir_net_request: RwLock::new(Instant::now()),
             flir_local_request: RwLock::new(Instant::now()),
             flir,
+            flir_turret,
+            distance_sensor,
+            nozzle_turret,
+            targeting_comp,
         });
         
         tokio::spawn(afv.clone().stream_flir());
 
         bus.add_element(afv.clone()).await;
+        
+        afv.broadcast_afv_uuid().await;
         
         loop{
             sleep(Duration::from_secs(10)).await;
@@ -85,6 +100,11 @@ impl Afv<Actuated>{
                     println!("Afv connected on port {}", GCSBRIDGEPORT);
                 },
             }
+            let flir = FlirController::<Local>::new(bus.clone()).await;
+            let flir_turret = FlirTurret::<Local>::new().await;
+            let nozzle_turret = NozzleTurret::<Local>::new().await;
+            let distance_sensor = DistanceSensor::<Local>::new().await; 
+            let targeting_comp = TargetingComputer::<Local>::new(bus.clone(), flir.clone(), flir_turret.clone(), nozzle_turret.clone(), distance_sensor.clone()).await;
             let afv:Arc<Afv<Simulated>> = Arc::new(Afv{
                 bus_uuid: thread_rng().gen(),
                 afv_uuid: thread_rng().gen(),
@@ -93,18 +113,32 @@ impl Afv<Actuated>{
                 _sim: PhantomData,
                 flir_net_request: RwLock::new(Instant::now()),
                 flir_local_request: RwLock::new(Instant::now()),
-                flir: FlirController::<Local>::new(bus.clone()).await,
+                flir,
+                flir_turret,
+                distance_sensor,
+                nozzle_turret,
+                targeting_comp,
             });
 
             tokio::spawn(afv.clone().stream_flir());
 
             bus.add_element(afv.clone()).await;
+
+            afv.broadcast_afv_uuid().await;
             
             loop{
                 sleep(Duration::from_secs(10)).await;
             }
         });
     }
+}
+
+impl<T: Send + Sync + 'static> Afv<T>{
+    async fn broadcast_afv_uuid(&self){
+        self.bus.clone().send(self.bus_uuid, AfvCtlMessage::Local(LocalMessages::SelectedAfv(self.afv_uuid))).await;
+
+    }
+    
 }
 
 #[async_trait]

@@ -10,5 +10,9 @@ impl<T> FlirTurret<T>{
             _net: PhantomData,
         })
     }
+
+    pub async fn adjust_angle(&self, angles: (f32, f32)){
+        
+    }
     
 }

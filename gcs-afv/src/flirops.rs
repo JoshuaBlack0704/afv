@@ -102,6 +102,15 @@ impl FlirController<Local>{
 
 
 impl<T: Send + Sync + 'static> FlirController<T>{
+    pub async fn enable_stream(&self){
+        *self.flir_decoder.write().await = match Decoder::new(){
+            Ok(d) => Some(d),
+            Err(_) => return,
+        }
+    }
+    pub async fn disable_stream(&self){
+        *self.flir_decoder.write().await = None;
+    }
     /// Returns the angle delta in degrees needed to center on the target centroid
     pub async fn get_target_offset(&self) -> (f32, f32){
         let target_centroid = self.flir_centroids.read().await.1;

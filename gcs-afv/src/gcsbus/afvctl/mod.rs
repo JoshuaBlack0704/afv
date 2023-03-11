@@ -40,7 +40,9 @@ impl AfvController{
 
         let flir = FlirController::<Network>::new(bus.clone()).await;
         let flir_turret = FlirTurret::<Network>::new().await;
-        let distance_sensor: 
+        let nozzle_turret = NozzleTurret::<Network>::new().await;
+        let distance_sensor = DistanceSensor::<Network>::new().await; 
+        let targeting_comp = TargetingComputer::<Network>::new(bus.clone(), flir.clone(), flir_turret.clone(), nozzle_turret.clone(), distance_sensor.clone()).await;
 
 
 
@@ -52,10 +54,10 @@ impl AfvController{
             afv_uuid: Default::default(),
             menu: RwLock::new(MenuTypes::Main),
             flir,
-            flir_turret: todo!(),
-            distance_sensor: todo!(),
-            nozzle_turret: todo!(),
-            targeting_comp: todo!(),
+            flir_turret,
+            distance_sensor,
+            nozzle_turret,
+            targeting_comp,
         });
 
         bus.add_element(ctl.clone()).await;
@@ -76,7 +78,8 @@ impl AfvController{
         
     }
 
-    fn render_main(&self, _ui: &mut Ui){
+    fn render_main(&self, ui: &mut Ui){
+        self.targeting_comp.auto_target_button(ui);
         
     }
 }
