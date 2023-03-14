@@ -1,9 +1,21 @@
-pub mod gui;
+pub const GCSBRIDGEPORT: u16 = 4040;
 
-pub mod network;
+pub mod bus;
 
-pub mod scanner;
+pub mod messages;
 
-pub mod afvctl;
+pub mod networkbus;
 
-pub mod afv;
+pub mod flirops;
+
+pub mod targetops;
+
+pub mod flirturret;
+
+pub mod distancesensor;
+
+pub mod nozzleturret;
+
+pub mod afvbus;
+
+pub mod gcsbus;
