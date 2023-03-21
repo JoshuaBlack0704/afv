@@ -1,7 +1,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::afvbus::AfvUuid;
+use crate::afv::AfvUuid;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum NetworkMessages{

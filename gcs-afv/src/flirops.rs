@@ -8,7 +8,7 @@ use openh264::{decoder::Decoder, to_bitstream_with_001_be, nal_units};
 use rand::{thread_rng, Rng};
 use tokio::{runtime::Handle, time::sleep, sync::RwLock};
 
-use crate::{bus::{BusUuid, Bus, BusElement}, afvbus::AfvUuid, messages::{AfvCtlMessage, NetworkMessages, LocalMessages}, networkbus::{Network, Local}};
+use crate::{bus::{BusUuid, Bus, BusElement}, afv::AfvUuid, messages::{AfvCtlMessage, NetworkMessages, LocalMessages}, network::{Network, Local}};
 
 const FLIRFOV: (f32, f32) = (29.0,22.0);
 pub struct FlirController<T>{

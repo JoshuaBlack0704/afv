@@ -13,7 +13,7 @@ use tokio::{
     sync::Mutex, time::Duration,
 };
 
-use crate::{bus::Bus, messages::AfvCtlMessage, afvbus::Afv};
+use crate::{bus::Bus, messages::AfvCtlMessage, afv::Afv};
 
 use self::{bridgefinder::BridgeFinder, afvselector::AfvSelector, afvctl::AfvController};
 

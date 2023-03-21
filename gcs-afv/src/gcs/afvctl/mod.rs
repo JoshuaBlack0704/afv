@@ -8,7 +8,7 @@ use eframe::egui::{Ui, self};
 use rand::{thread_rng, Rng};
 use tokio::{runtime::Handle, sync::RwLock};
 
-use crate::{bus::{Bus, BusUuid, BusElement}, afvbus::AfvUuid, messages::{AfvCtlMessage, LocalMessages}, flirops::FlirController, networkbus::Network, flirturret::FlirTurret, distancesensor::DistanceSensor, nozzleturret::NozzleTurret, targetops::TargetingComputer};
+use crate::{bus::{Bus, BusUuid, BusElement}, afv::AfvUuid, messages::{AfvCtlMessage, LocalMessages}, flirops::FlirController, network::Network, flirturret::FlirTurret, distancesensor::DistanceSensor, nozzleturret::NozzleTurret, targetops::TargetingComputer};
 
 use super::Renderable;
 

@@ -5,7 +5,7 @@ use eframe::egui::ComboBox;
 use rand::{thread_rng, Rng};
 use tokio::{sync::RwLock, runtime::Handle};
 
-use crate::{bus::{Bus, BusElement, BusUuid}, afvbus::AfvUuid, messages::{AfvCtlMessage, NetworkMessages, LocalMessages}};
+use crate::{bus::{Bus, BusElement, BusUuid}, afv::AfvUuid, messages::{AfvCtlMessage, NetworkMessages, LocalMessages}};
 
 use super::Renderable;
 

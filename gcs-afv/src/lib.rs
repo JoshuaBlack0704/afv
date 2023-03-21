@@ -4,7 +4,7 @@ pub mod bus;
 
 pub mod messages;
 
-pub mod networkbus;
+pub mod network;
 
 pub mod flirops;
 
@@ -16,6 +16,6 @@ pub mod distancesensor;
 
 pub mod nozzleturret;
 
-pub mod afvbus;
+pub mod afv;
 
-pub mod gcsbus;
+pub mod gcs;

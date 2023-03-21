@@ -8,16 +8,16 @@ use tokio::{runtime::Handle, sync::RwLock};
 
 use crate::bus::BusElement;
 use crate::messages::{NetworkMessages, LocalMessages};
-use crate::networkbus::Local;
+use crate::network::Local;
 use crate::nozzleturret::NozzleTurret;
 use crate::{
-    afvbus::AfvUuid,
+    afv::AfvUuid,
     bus::{Bus, BusUuid},
     distancesensor::DistanceSensor,
     flirops::FlirController,
     flirturret::FlirTurret,
     messages::AfvCtlMessage,
-    networkbus::Network,
+    network::Network,
 };
 
 const AUTO_TARGET_WAIT_TIME: Duration = Duration::from_secs(1);

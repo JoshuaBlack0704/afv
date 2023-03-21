@@ -5,8 +5,8 @@ use eframe::egui::Ui;
 use rand::{thread_rng, Rng};
 use tokio::{net::TcpStream, sync::Mutex, runtime::Handle, time::{Duration, sleep}};
 
-use crate::{bus::{Bus, BusUuid}, GCSBRIDGEPORT, networkbus::{scanner::ScanCount, networkbridge::NetworkBridge}, messages::{AfvCtlMessage, NetworkMessages}};
-use crate::networkbus::scanner::ScanBuilder;
+use crate::{bus::{Bus, BusUuid}, GCSBRIDGEPORT, network::{scanner::ScanCount, networkbridge::NetworkBridge}, messages::{AfvCtlMessage, NetworkMessages}};
+use crate::network::scanner::ScanBuilder;
 
 use super::Renderable;
 

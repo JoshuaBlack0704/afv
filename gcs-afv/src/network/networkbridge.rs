@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use rand::{thread_rng, Rng};
 use tokio::{net::{tcp::{OwnedWriteHalf, OwnedReadHalf}, TcpStream, ToSocketAddrs, TcpListener}, sync::{RwLock, Mutex}, io::{AsyncReadExt, AsyncWriteExt}};
 
-use crate::{bus::{BusElement, Bus, BusUuid}, afvbus::AfvUuid, messages::{AfvCtlMessage, NetworkMessages}};
+use crate::{bus::{BusElement, Bus, BusUuid}, afv::AfvUuid, messages::{AfvCtlMessage, NetworkMessages}};
 
 pub struct NetworkBridge{
     server: bool,

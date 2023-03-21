@@ -1,4 +1,4 @@
-use gcs_afv::afvbus::Afv;
+use gcs_afv::afv::Afv;
 
 
 fn main(){
