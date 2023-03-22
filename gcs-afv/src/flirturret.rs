@@ -1,18 +1,64 @@
 use std::{marker::PhantomData, sync::Arc};
 
+use afv_internal::FLIRTURRETPORT;
+use tokio::{sync::Mutex, net::TcpStream};
+
+use crate::network::{socket::Socket, scanner::ScanBuilder, Network, Local};
+
 pub struct FlirTurret<NetType>{
+    socket: Arc<Mutex<Option<Socket>>>,
     _net: PhantomData<NetType>,
 }
 
-impl<T> FlirTurret<T>{
+impl FlirTurret<Local>{
+    pub async fn new() -> Arc<Self> {
+        let ctl = Arc::new(Self{
+            _net: PhantomData,
+            socket: Default::default(),
+        });
+
+        tokio::spawn(ctl.clone().initial_connection());
+
+        ctl
+    }
+
+    async fn initial_connection(self: Arc<Self>){
+        let scan = ScanBuilder::default()
+        .scan_count(crate::network::scanner::ScanCount::Infinite)
+        .add_port(FLIRTURRETPORT)
+        .dispatch();
+
+        let stream = match scan.recv_async().await{
+            Ok(stream) => stream,
+            Err(_) => return,
+        };
+
+        drop(scan);
+
+        println!("Connected to flir turret at {}", stream.peer_addr().unwrap());
+
+        *self.socket.lock().await = Some(Socket::new(stream, false));
+
+        // For testing only
+        loop{
+            let _ = self.socket.lock().await.as_ref().unwrap().clone().read_byte().await;
+        }
+    }
+    
+}
+
+impl FlirTurret<Network>{
     pub async fn new() -> Arc<Self> {
         Arc::new(Self{
+            socket: Default::default(),
             _net: PhantomData,
         })
     }
+    
+}
 
+impl<T: Send + Sync + 'static> FlirTurret<T>{
     pub async fn adjust_angle(&self, angles: (f32, f32)){
         
     }
-    
 }

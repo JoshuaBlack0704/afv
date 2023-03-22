@@ -3,15 +3,15 @@
 #![feature(abi_avr_interrupt)]
 
 use afv_internal::{w5500::{W5500, socket_register::{self, SocketBlock}}, mainctl::MainCtl};
-use afv_internal::MAINCTLPORT;
+use afv_internal::FLIRTURRETPORT;
 use arduino_hal::Spi;
 use embedded_hal::spi::{Polarity, Phase};
 use panic_halt as _;
 
-const GATEWAY: [u8;4] = [10,192,138,254];
+const GATEWAY: [u8;4] = [169,254,80,1];
 const SUBNET: [u8;4] = [255,255,255,0];
 const MAC: [u8;6] = [0x00,0x08,0xdc,0x01,0x02,0x03];
-const IP: [u8;4] = [10,192,138,10];
+const IP: [u8;4] = [169,254,80,100];
 
 #[arduino_hal::entry]
 fn main() -> ! {
@@ -51,7 +51,7 @@ fn main() -> ! {
     let _ = ufmt::uwriteln!(&mut serial, "W5500 Link Status {}", common_block.read_phy_cfg(&mut spi, &mut cs).link_status());
 
     let mode = socket_register::Mode::default().set_protocol_tcp();
-    let socket0 = W5500::socket_n(SocketBlock::SOCKET0, mode, MAINCTLPORT, &mut spi, &mut cs);
+    let socket0 = W5500::socket_n(SocketBlock::SOCKET0, mode, FLIRTURRETPORT, &mut spi, &mut cs);
     let mut mainctl = MainCtl::new(socket0, pins.d2.into_output());
 
     loop {

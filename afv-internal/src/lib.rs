@@ -1,6 +1,7 @@
 #![no_std]
 
 pub const MAINCTLPORT: u16 = 3030;
+pub const FLIRTURRETPORT: u16 = 3031;
 pub const SOCKET_MSG_SIZE: usize = 256;
 
 pub mod network;
