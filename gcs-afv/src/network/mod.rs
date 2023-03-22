@@ -5,4 +5,6 @@ pub struct Network;
 
 pub mod scanner;
 
+pub mod socket;
+
 pub mod networkbridge;

@@ -2,31 +2,31 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use rand::{thread_rng, Rng};
-use tokio::{net::{tcp::{OwnedWriteHalf, OwnedReadHalf}, TcpStream, ToSocketAddrs, TcpListener}, sync::{RwLock, Mutex}, io::{AsyncReadExt, AsyncWriteExt}};
+use tokio::{net::{TcpStream, ToSocketAddrs, TcpListener}, sync::RwLock};
 
 use crate::{bus::{BusElement, Bus, BusUuid}, afv::AfvUuid, messages::{AfvCtlMessage, NetworkMessages}};
 
+use super::socket::Socket;
+
 pub struct NetworkBridge{
-    server: bool,
     uuid: BusUuid,
     bus: Bus<AfvCtlMessage>,
     afv_uuid: RwLock<Option<AfvUuid>>,
-    write: Mutex<OwnedWriteHalf>,
+    socket: Socket,
 }
 
 impl NetworkBridge{
     pub async fn new(bus: &Bus<AfvCtlMessage>, stream: TcpStream, is_server: bool) -> Arc<NetworkBridge> {
-        let (rd, wr) = stream.into_split();
+        let socket = Socket::new(stream, is_server);
         
         let bridge = Arc::new(Self{
             uuid: thread_rng().gen(),
             bus: bus.clone(),
             afv_uuid: Default::default(),
-            write: Mutex::new(wr),
-            server: is_server,
+            socket,
         });
 
-        tokio::spawn(bridge.clone().listen(rd));
+        tokio::spawn(bridge.clone().listen());
 
         bus.add_element(bridge.clone()).await;
 
@@ -60,32 +60,21 @@ impl NetworkBridge{
         None
     }
 
-    async fn listen(self: Arc<Self>, mut rd: OwnedReadHalf){
+    async fn listen(self: Arc<Self>){
         let mut data:Vec<u8> = vec![];
         
         loop{
             // The function only ends in error
-            while let Ok(byte) = rd.read_u8().await{
-                data.push(byte); 
+            let byte = self.socket.clone().read_byte().await;
+            data.push(byte); 
 
-                if let Ok(msg) = bincode::deserialize::<AfvCtlMessage>(&data){
-                    // println!("Received message {:?}", msg);
-                    if let AfvCtlMessage::Network(NetworkMessages::AfvUuid(uuid)) = msg{
-                        *self.afv_uuid.write().await = Some(uuid);
-                    }
-                    self.bus.clone().send(self.uuid, msg).await;
-                    data.clear();
+            if let Ok(msg) = bincode::deserialize::<AfvCtlMessage>(&data){
+                // println!("Received message {:?}", msg);
+                if let AfvCtlMessage::Network(NetworkMessages::AfvUuid(uuid)) = msg{
+                    *self.afv_uuid.write().await = Some(uuid);
                 }
-            }
-        
-
-            // TODO: implement reconnect procedure
-
-            if self.server{
-                rd = self.reconnect_server().await;
-            }
-            else{
-                rd = self.reconnect_client().await;
+                self.bus.clone().send(self.uuid, msg).await;
+                data.clear();
             }
         }
     }
@@ -132,17 +121,9 @@ impl NetworkBridge{
             }
         }
         if let Ok(msg) = bincode::serialize(&msg){
-            let _ = self.write.lock().await.write(&msg).await;
+            self.socket.write_data(&msg).await;
         }
     }
-
-    async fn reconnect_server(&self) -> OwnedReadHalf{
-        todo!()
-    }
-    async fn reconnect_client(&self) -> OwnedReadHalf{
-        todo!()
-    }
-
 }
 
 #[async_trait]
