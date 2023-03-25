@@ -5,13 +5,14 @@ Comment,Designator,Footprint,LCSC Part #
 "150uf Unpolarized capacitor, small symbol","C7,C12",C_Radial_D10.0mm_H12.5mm_P5.00mm,C432404
 "470nF Unpolarized capacitor, small symbol","C8,C9,C13,C14",C_0402_1005Metric,C437526
 "680uF Unpolarized capacitor, small symbol",C15,C_Radial_D8.0mm_H11.5mm_P3.50mm,C88760
-LED Light emitting diode,D1,LED_0603_1608Metric,C2286
+LED Light emitting diode,"D1,D2,D3,D4,D5,D6,D7,D8,D9,D10,D11,D12,D13,D14,D15,D16,D17,D18,D19",LED_0603_1608Metric,C2286
 "FLIR Generic connector, single row, 01x06, script generated (kicad-library-utils/schlib/autogen/connector/)",J1,JST_GH_SM06B-GHS-TB_1x06-1MP_P1.25mm_Horizontal,C133065
 "Stepper1 Generic connector, single row, 01x04, script generated (kicad-library-utils/schlib/autogen/connector/)",J2,"PhoenixContact_MCV_1,5_4-G-3.5_1x04_P3.50mm_Vertical",
 "Stepper2 Generic connector, single row, 01x04, script generated (kicad-library-utils/schlib/autogen/connector/)",J3,"PhoenixContact_MCV_1,5_4-G-3.5_1x04_P3.50mm_Vertical",
 "PWR Generic connector, single row, 01x02, script generated (kicad-library-utils/schlib/autogen/connector/)",J4,"PhoenixContact_MC_1,5_2-G-3.5_1x02_P3.50mm_Horizontal",
+"Sensors Generic connector, single row, 01x06, script generated (kicad-library-utils/schlib/autogen/connector/)",J5,JST_GH_SM06B-GHS-TB_1x06-1MP_P1.25mm_Horizontal,C133065
 "30k Resistor, small symbol","R1,R4",R_0402_1005Metric,C25779
 "10k Resistor, small symbol","R2,R3",R_0402_1005Metric,C25744
-"290 Resistor, small symbol",R5,R_0402_1005Metric,C25104
+"330 Resistor, small symbol","R5,R6,R7,R8,R9,R10,R11,R12,R13,R14,R15,R16,R17,R18,R19,R20,R21,R22,R23",R_0402_1005Metric,C25104
 ~ ,"U1,U2",HTSSOP-24-1EP_4.4x7.8mm_P0.65mm_EP3.4x7.8mm_Mask2.4x2.98mm,
 Arduino_Uno_R3_Shield Shield for Arduino Uno R3,XA1,Arduino_Uno_R3_Shield,
