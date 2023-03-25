@@ -2,7 +2,7 @@
 <export version="E">
   <design>
     <source>C:\Users\knigh\Documents\Github\afv\PcbDesign\TurretCtl\TurretCtl.kicad_sch</source>
-    <date>3/1/2023 7:43:49 PM</date>
+    <date>3/24/2023 7:04:49 PM</date>
     <tool>Eeschema (7.0.0)</tool>
     <sheet number="1" name="/" tstamps="/">
       <title_block>
@@ -94,6 +94,74 @@
       <sheetpath names="/" tstamps="/"/>
       <tstamps>4af47aa0-cd96-422c-b5a9-d49762e6fcf1</tstamps>
     </comp>
+    <comp ref="D14">
+      <value>LED</value>
+      <footprint>LED_SMD:LED_0603_1608Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C2286</field>
+        <field name="LCSC Part #">C2286</field>
+      </fields>
+      <libsource lib="Device" part="LED" description="Light emitting diode"/>
+      <property name="LCSC Part #" value="C2286"/>
+      <property name="LCSC Part" value="C2286"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="TurretCtl.kicad_sch"/>
+      <property name="ki_description" value="Light emitting diode"/>
+      <property name="ki_keywords" value="LED diode"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>905b6882-d002-48cc-acfc-18dffa68865f</tstamps>
+    </comp>
+    <comp ref="D15">
+      <value>LED</value>
+      <footprint>LED_SMD:LED_0603_1608Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C2286</field>
+        <field name="LCSC Part #">C2286</field>
+      </fields>
+      <libsource lib="Device" part="LED" description="Light emitting diode"/>
+      <property name="LCSC Part #" value="C2286"/>
+      <property name="LCSC Part" value="C2286"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="TurretCtl.kicad_sch"/>
+      <property name="ki_description" value="Light emitting diode"/>
+      <property name="ki_keywords" value="LED diode"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>3d3f6198-b9ed-4d7c-8227-8dfe8f183864</tstamps>
+    </comp>
+    <comp ref="D18">
+      <value>LED</value>
+      <footprint>LED_SMD:LED_0603_1608Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C2286</field>
+        <field name="LCSC Part #">C2286</field>
+      </fields>
+      <libsource lib="Device" part="LED" description="Light emitting diode"/>
+      <property name="LCSC Part #" value="C2286"/>
+      <property name="LCSC Part" value="C2286"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="TurretCtl.kicad_sch"/>
+      <property name="ki_description" value="Light emitting diode"/>
+      <property name="ki_keywords" value="LED diode"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>8c19aed5-eac0-4c98-9cee-dc8c8b43cd3c</tstamps>
+    </comp>
+    <comp ref="D19">
+      <value>LED</value>
+      <footprint>LED_SMD:LED_0603_1608Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C2286</field>
+        <field name="LCSC Part #">C2286</field>
+      </fields>
+      <libsource lib="Device" part="LED" description="Light emitting diode"/>
+      <property name="LCSC Part #" value="C2286"/>
+      <property name="LCSC Part" value="C2286"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="TurretCtl.kicad_sch"/>
+      <property name="ki_description" value="Light emitting diode"/>
+      <property name="ki_keywords" value="LED diode"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>a5ba8907-ff16-422a-aa59-9375222022bc</tstamps>
+    </comp>
     <comp ref="J1">
       <value>FLIR</value>
       <footprint>Connector_JST:JST_GH_SM06B-GHS-TB_1x06-1MP_P1.25mm_Horizontal</footprint>
@@ -150,8 +218,25 @@
       <sheetpath names="/" tstamps="/"/>
       <tstamps>2eba2234-0027-426c-9c24-4d8cc770cf50</tstamps>
     </comp>
+    <comp ref="J5">
+      <value>Sensors</value>
+      <footprint>Connector_JST:JST_GH_SM06B-GHS-TB_1x06-1MP_P1.25mm_Horizontal</footprint>
+      <fields>
+        <field name="LCSC Part">C133065</field>
+        <field name="LCSC Part #">C133065</field>
+      </fields>
+      <libsource lib="Connector_Generic" part="Conn_01x06" description="Generic connector, single row, 01x06, script generated (kicad-library-utils/schlib/autogen/connector/)"/>
+      <property name="LCSC Part #" value="C133065"/>
+      <property name="LCSC Part" value="C133065"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="TurretCtl.kicad_sch"/>
+      <property name="ki_description" value="Generic connector, single row, 01x06, script generated (kicad-library-utils/schlib/autogen/connector/)"/>
+      <property name="ki_keywords" value="connector"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>91f1a45d-1da6-488d-b55d-f28bdd3811e7</tstamps>
+    </comp>
     <comp ref="R5">
-      <value>290</value>
+      <value>330</value>
       <footprint>Resistor_SMD:R_0402_1005Metric</footprint>
       <fields>
         <field name="LCSC Part">C25104</field>
@@ -166,6 +251,74 @@
       <property name="ki_keywords" value="R resistor"/>
       <sheetpath names="/" tstamps="/"/>
       <tstamps>ba8acd2d-8ea4-4d54-8d54-b5b1a2aa4ec6</tstamps>
+    </comp>
+    <comp ref="R18">
+      <value>330</value>
+      <footprint>Resistor_SMD:R_0402_1005Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C25104</field>
+        <field name="LCSC Part #">C25104</field>
+      </fields>
+      <libsource lib="Device" part="R_Small" description="Resistor, small symbol"/>
+      <property name="LCSC Part #" value="C25104"/>
+      <property name="LCSC Part" value="C25104"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="TurretCtl.kicad_sch"/>
+      <property name="ki_description" value="Resistor, small symbol"/>
+      <property name="ki_keywords" value="R resistor"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>72db5284-d797-47a2-83c3-7d864ce58665</tstamps>
+    </comp>
+    <comp ref="R19">
+      <value>330</value>
+      <footprint>Resistor_SMD:R_0402_1005Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C25104</field>
+        <field name="LCSC Part #">C25104</field>
+      </fields>
+      <libsource lib="Device" part="R_Small" description="Resistor, small symbol"/>
+      <property name="LCSC Part #" value="C25104"/>
+      <property name="LCSC Part" value="C25104"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="TurretCtl.kicad_sch"/>
+      <property name="ki_description" value="Resistor, small symbol"/>
+      <property name="ki_keywords" value="R resistor"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>371fe577-84c5-48c0-94db-3981ab7005cb</tstamps>
+    </comp>
+    <comp ref="R22">
+      <value>330</value>
+      <footprint>Resistor_SMD:R_0402_1005Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C25104</field>
+        <field name="LCSC Part #">C25104</field>
+      </fields>
+      <libsource lib="Device" part="R_Small" description="Resistor, small symbol"/>
+      <property name="LCSC Part #" value="C25104"/>
+      <property name="LCSC Part" value="C25104"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="TurretCtl.kicad_sch"/>
+      <property name="ki_description" value="Resistor, small symbol"/>
+      <property name="ki_keywords" value="R resistor"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>5d1abafc-6da2-44a0-a66d-f3a7833efd3e</tstamps>
+    </comp>
+    <comp ref="R23">
+      <value>330</value>
+      <footprint>Resistor_SMD:R_0402_1005Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C25104</field>
+        <field name="LCSC Part #">C25104</field>
+      </fields>
+      <libsource lib="Device" part="R_Small" description="Resistor, small symbol"/>
+      <property name="LCSC Part #" value="C25104"/>
+      <property name="LCSC Part" value="C25104"/>
+      <property name="Sheetname" value=""/>
+      <property name="Sheetfile" value="TurretCtl.kicad_sch"/>
+      <property name="ki_description" value="Resistor, small symbol"/>
+      <property name="ki_keywords" value="R resistor"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamps>f04a42be-266d-4dd2-be4b-f58a97b9f5b5</tstamps>
     </comp>
     <comp ref="XA1">
       <value>Arduino_Uno_R3_Shield</value>
@@ -300,6 +453,125 @@
       <sheetpath names="/Stepper1/" tstamps="/9d77d4b7-dc15-471e-94c5-254ad55bf7a4/"/>
       <tstamps>8f4fce64-9cb5-4191-a019-82b41062b76c</tstamps>
     </comp>
+    <comp ref="D2">
+      <value>LED</value>
+      <footprint>LED_SMD:LED_0603_1608Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C2286</field>
+        <field name="LCSC Part #">C2286</field>
+      </fields>
+      <libsource lib="Device" part="LED" description="Light emitting diode"/>
+      <property name="LCSC Part #" value="C2286"/>
+      <property name="LCSC Part" value="C2286"/>
+      <property name="Sheetname" value="Stepper1"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Light emitting diode"/>
+      <property name="ki_keywords" value="LED diode"/>
+      <sheetpath names="/Stepper1/" tstamps="/9d77d4b7-dc15-471e-94c5-254ad55bf7a4/"/>
+      <tstamps>6d8ce083-a50f-48b7-974b-926427c351bd</tstamps>
+    </comp>
+    <comp ref="D4">
+      <value>LED</value>
+      <footprint>LED_SMD:LED_0603_1608Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C2286</field>
+        <field name="LCSC Part #">C2286</field>
+      </fields>
+      <libsource lib="Device" part="LED" description="Light emitting diode"/>
+      <property name="LCSC Part #" value="C2286"/>
+      <property name="LCSC Part" value="C2286"/>
+      <property name="Sheetname" value="Stepper1"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Light emitting diode"/>
+      <property name="ki_keywords" value="LED diode"/>
+      <sheetpath names="/Stepper1/" tstamps="/9d77d4b7-dc15-471e-94c5-254ad55bf7a4/"/>
+      <tstamps>5285cb85-5f13-445a-8c2d-a8f8170a7fd0</tstamps>
+    </comp>
+    <comp ref="D6">
+      <value>LED</value>
+      <footprint>LED_SMD:LED_0603_1608Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C2286</field>
+        <field name="LCSC Part #">C2286</field>
+      </fields>
+      <libsource lib="Device" part="LED" description="Light emitting diode"/>
+      <property name="LCSC Part #" value="C2286"/>
+      <property name="LCSC Part" value="C2286"/>
+      <property name="Sheetname" value="Stepper1"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Light emitting diode"/>
+      <property name="ki_keywords" value="LED diode"/>
+      <sheetpath names="/Stepper1/" tstamps="/9d77d4b7-dc15-471e-94c5-254ad55bf7a4/"/>
+      <tstamps>d43e97c5-fc9c-447b-a732-7518c4f8532a</tstamps>
+    </comp>
+    <comp ref="D8">
+      <value>LED</value>
+      <footprint>LED_SMD:LED_0603_1608Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C2286</field>
+        <field name="LCSC Part #">C2286</field>
+      </fields>
+      <libsource lib="Device" part="LED" description="Light emitting diode"/>
+      <property name="LCSC Part #" value="C2286"/>
+      <property name="LCSC Part" value="C2286"/>
+      <property name="Sheetname" value="Stepper1"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Light emitting diode"/>
+      <property name="ki_keywords" value="LED diode"/>
+      <sheetpath names="/Stepper1/" tstamps="/9d77d4b7-dc15-471e-94c5-254ad55bf7a4/"/>
+      <tstamps>9d43181d-b2f5-4b75-8382-12420b09f83a</tstamps>
+    </comp>
+    <comp ref="D10">
+      <value>LED</value>
+      <footprint>LED_SMD:LED_0603_1608Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C2286</field>
+        <field name="LCSC Part #">C2286</field>
+      </fields>
+      <libsource lib="Device" part="LED" description="Light emitting diode"/>
+      <property name="LCSC Part #" value="C2286"/>
+      <property name="LCSC Part" value="C2286"/>
+      <property name="Sheetname" value="Stepper1"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Light emitting diode"/>
+      <property name="ki_keywords" value="LED diode"/>
+      <sheetpath names="/Stepper1/" tstamps="/9d77d4b7-dc15-471e-94c5-254ad55bf7a4/"/>
+      <tstamps>a3c3722a-4a2c-4e4e-8f7e-c5f139bb6fc3</tstamps>
+    </comp>
+    <comp ref="D12">
+      <value>LED</value>
+      <footprint>LED_SMD:LED_0603_1608Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C2286</field>
+        <field name="LCSC Part #">C2286</field>
+      </fields>
+      <libsource lib="Device" part="LED" description="Light emitting diode"/>
+      <property name="LCSC Part #" value="C2286"/>
+      <property name="LCSC Part" value="C2286"/>
+      <property name="Sheetname" value="Stepper1"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Light emitting diode"/>
+      <property name="ki_keywords" value="LED diode"/>
+      <sheetpath names="/Stepper1/" tstamps="/9d77d4b7-dc15-471e-94c5-254ad55bf7a4/"/>
+      <tstamps>a456c147-3fee-4e1d-8867-3d1d00b171be</tstamps>
+    </comp>
+    <comp ref="D16">
+      <value>LED</value>
+      <footprint>LED_SMD:LED_0603_1608Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C2286</field>
+        <field name="LCSC Part #">C2286</field>
+      </fields>
+      <libsource lib="Device" part="LED" description="Light emitting diode"/>
+      <property name="LCSC Part #" value="C2286"/>
+      <property name="LCSC Part" value="C2286"/>
+      <property name="Sheetname" value="Stepper1"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Light emitting diode"/>
+      <property name="ki_keywords" value="LED diode"/>
+      <sheetpath names="/Stepper1/" tstamps="/9d77d4b7-dc15-471e-94c5-254ad55bf7a4/"/>
+      <tstamps>0117f792-56ce-4dd4-a3fe-aa9ab739fce3</tstamps>
+    </comp>
     <comp ref="R1">
       <value>30k</value>
       <footprint>Resistor_SMD:R_0402_1005Metric</footprint>
@@ -333,6 +605,125 @@
       <property name="ki_keywords" value="R resistor"/>
       <sheetpath names="/Stepper1/" tstamps="/9d77d4b7-dc15-471e-94c5-254ad55bf7a4/"/>
       <tstamps>db96e28e-963b-46ba-b96a-98c08352ffb7</tstamps>
+    </comp>
+    <comp ref="R6">
+      <value>330</value>
+      <footprint>Resistor_SMD:R_0402_1005Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C25104</field>
+        <field name="LCSC Part #">C25104</field>
+      </fields>
+      <libsource lib="Device" part="R_Small" description="Resistor, small symbol"/>
+      <property name="LCSC Part #" value="C25104"/>
+      <property name="LCSC Part" value="C25104"/>
+      <property name="Sheetname" value="Stepper1"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Resistor, small symbol"/>
+      <property name="ki_keywords" value="R resistor"/>
+      <sheetpath names="/Stepper1/" tstamps="/9d77d4b7-dc15-471e-94c5-254ad55bf7a4/"/>
+      <tstamps>b887c287-7874-4b08-ae55-ae7041d589b1</tstamps>
+    </comp>
+    <comp ref="R8">
+      <value>330</value>
+      <footprint>Resistor_SMD:R_0402_1005Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C25104</field>
+        <field name="LCSC Part #">C25104</field>
+      </fields>
+      <libsource lib="Device" part="R_Small" description="Resistor, small symbol"/>
+      <property name="LCSC Part #" value="C25104"/>
+      <property name="LCSC Part" value="C25104"/>
+      <property name="Sheetname" value="Stepper1"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Resistor, small symbol"/>
+      <property name="ki_keywords" value="R resistor"/>
+      <sheetpath names="/Stepper1/" tstamps="/9d77d4b7-dc15-471e-94c5-254ad55bf7a4/"/>
+      <tstamps>16813941-3dfb-443e-94c2-07b32fd85665</tstamps>
+    </comp>
+    <comp ref="R10">
+      <value>330</value>
+      <footprint>Resistor_SMD:R_0402_1005Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C25104</field>
+        <field name="LCSC Part #">C25104</field>
+      </fields>
+      <libsource lib="Device" part="R_Small" description="Resistor, small symbol"/>
+      <property name="LCSC Part #" value="C25104"/>
+      <property name="LCSC Part" value="C25104"/>
+      <property name="Sheetname" value="Stepper1"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Resistor, small symbol"/>
+      <property name="ki_keywords" value="R resistor"/>
+      <sheetpath names="/Stepper1/" tstamps="/9d77d4b7-dc15-471e-94c5-254ad55bf7a4/"/>
+      <tstamps>f732c148-9dde-4633-979d-6e602127b468</tstamps>
+    </comp>
+    <comp ref="R12">
+      <value>330</value>
+      <footprint>Resistor_SMD:R_0402_1005Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C25104</field>
+        <field name="LCSC Part #">C25104</field>
+      </fields>
+      <libsource lib="Device" part="R_Small" description="Resistor, small symbol"/>
+      <property name="LCSC Part #" value="C25104"/>
+      <property name="LCSC Part" value="C25104"/>
+      <property name="Sheetname" value="Stepper1"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Resistor, small symbol"/>
+      <property name="ki_keywords" value="R resistor"/>
+      <sheetpath names="/Stepper1/" tstamps="/9d77d4b7-dc15-471e-94c5-254ad55bf7a4/"/>
+      <tstamps>7d2b6809-0bf7-4686-a494-dbf986611313</tstamps>
+    </comp>
+    <comp ref="R14">
+      <value>330</value>
+      <footprint>Resistor_SMD:R_0402_1005Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C25104</field>
+        <field name="LCSC Part #">C25104</field>
+      </fields>
+      <libsource lib="Device" part="R_Small" description="Resistor, small symbol"/>
+      <property name="LCSC Part #" value="C25104"/>
+      <property name="LCSC Part" value="C25104"/>
+      <property name="Sheetname" value="Stepper1"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Resistor, small symbol"/>
+      <property name="ki_keywords" value="R resistor"/>
+      <sheetpath names="/Stepper1/" tstamps="/9d77d4b7-dc15-471e-94c5-254ad55bf7a4/"/>
+      <tstamps>73ce56d7-6359-4039-b560-bf53586cba07</tstamps>
+    </comp>
+    <comp ref="R16">
+      <value>330</value>
+      <footprint>Resistor_SMD:R_0402_1005Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C25104</field>
+        <field name="LCSC Part #">C25104</field>
+      </fields>
+      <libsource lib="Device" part="R_Small" description="Resistor, small symbol"/>
+      <property name="LCSC Part #" value="C25104"/>
+      <property name="LCSC Part" value="C25104"/>
+      <property name="Sheetname" value="Stepper1"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Resistor, small symbol"/>
+      <property name="ki_keywords" value="R resistor"/>
+      <sheetpath names="/Stepper1/" tstamps="/9d77d4b7-dc15-471e-94c5-254ad55bf7a4/"/>
+      <tstamps>0f883935-43d1-4821-8ab1-b941e8a9b4f1</tstamps>
+    </comp>
+    <comp ref="R20">
+      <value>330</value>
+      <footprint>Resistor_SMD:R_0402_1005Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C25104</field>
+        <field name="LCSC Part #">C25104</field>
+      </fields>
+      <libsource lib="Device" part="R_Small" description="Resistor, small symbol"/>
+      <property name="LCSC Part #" value="C25104"/>
+      <property name="LCSC Part" value="C25104"/>
+      <property name="Sheetname" value="Stepper1"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Resistor, small symbol"/>
+      <property name="ki_keywords" value="R resistor"/>
+      <sheetpath names="/Stepper1/" tstamps="/9d77d4b7-dc15-471e-94c5-254ad55bf7a4/"/>
+      <tstamps>051735b6-e1e1-42cb-99ef-cb3c79e0b354</tstamps>
     </comp>
     <comp ref="U2">
       <value>~</value>
@@ -464,6 +855,125 @@
       <sheetpath names="/Stepper2/" tstamps="/a9029235-dc0e-47ba-826b-288be698a9f2/"/>
       <tstamps>8f4fce64-9cb5-4191-a019-82b41062b76c</tstamps>
     </comp>
+    <comp ref="D3">
+      <value>LED</value>
+      <footprint>LED_SMD:LED_0603_1608Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C2286</field>
+        <field name="LCSC Part #">C2286</field>
+      </fields>
+      <libsource lib="Device" part="LED" description="Light emitting diode"/>
+      <property name="LCSC Part #" value="C2286"/>
+      <property name="LCSC Part" value="C2286"/>
+      <property name="Sheetname" value="Stepper2"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Light emitting diode"/>
+      <property name="ki_keywords" value="LED diode"/>
+      <sheetpath names="/Stepper2/" tstamps="/a9029235-dc0e-47ba-826b-288be698a9f2/"/>
+      <tstamps>6d8ce083-a50f-48b7-974b-926427c351bd</tstamps>
+    </comp>
+    <comp ref="D5">
+      <value>LED</value>
+      <footprint>LED_SMD:LED_0603_1608Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C2286</field>
+        <field name="LCSC Part #">C2286</field>
+      </fields>
+      <libsource lib="Device" part="LED" description="Light emitting diode"/>
+      <property name="LCSC Part #" value="C2286"/>
+      <property name="LCSC Part" value="C2286"/>
+      <property name="Sheetname" value="Stepper2"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Light emitting diode"/>
+      <property name="ki_keywords" value="LED diode"/>
+      <sheetpath names="/Stepper2/" tstamps="/a9029235-dc0e-47ba-826b-288be698a9f2/"/>
+      <tstamps>5285cb85-5f13-445a-8c2d-a8f8170a7fd0</tstamps>
+    </comp>
+    <comp ref="D7">
+      <value>LED</value>
+      <footprint>LED_SMD:LED_0603_1608Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C2286</field>
+        <field name="LCSC Part #">C2286</field>
+      </fields>
+      <libsource lib="Device" part="LED" description="Light emitting diode"/>
+      <property name="LCSC Part #" value="C2286"/>
+      <property name="LCSC Part" value="C2286"/>
+      <property name="Sheetname" value="Stepper2"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Light emitting diode"/>
+      <property name="ki_keywords" value="LED diode"/>
+      <sheetpath names="/Stepper2/" tstamps="/a9029235-dc0e-47ba-826b-288be698a9f2/"/>
+      <tstamps>d43e97c5-fc9c-447b-a732-7518c4f8532a</tstamps>
+    </comp>
+    <comp ref="D9">
+      <value>LED</value>
+      <footprint>LED_SMD:LED_0603_1608Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C2286</field>
+        <field name="LCSC Part #">C2286</field>
+      </fields>
+      <libsource lib="Device" part="LED" description="Light emitting diode"/>
+      <property name="LCSC Part #" value="C2286"/>
+      <property name="LCSC Part" value="C2286"/>
+      <property name="Sheetname" value="Stepper2"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Light emitting diode"/>
+      <property name="ki_keywords" value="LED diode"/>
+      <sheetpath names="/Stepper2/" tstamps="/a9029235-dc0e-47ba-826b-288be698a9f2/"/>
+      <tstamps>9d43181d-b2f5-4b75-8382-12420b09f83a</tstamps>
+    </comp>
+    <comp ref="D11">
+      <value>LED</value>
+      <footprint>LED_SMD:LED_0603_1608Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C2286</field>
+        <field name="LCSC Part #">C2286</field>
+      </fields>
+      <libsource lib="Device" part="LED" description="Light emitting diode"/>
+      <property name="LCSC Part #" value="C2286"/>
+      <property name="LCSC Part" value="C2286"/>
+      <property name="Sheetname" value="Stepper2"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Light emitting diode"/>
+      <property name="ki_keywords" value="LED diode"/>
+      <sheetpath names="/Stepper2/" tstamps="/a9029235-dc0e-47ba-826b-288be698a9f2/"/>
+      <tstamps>a3c3722a-4a2c-4e4e-8f7e-c5f139bb6fc3</tstamps>
+    </comp>
+    <comp ref="D13">
+      <value>LED</value>
+      <footprint>LED_SMD:LED_0603_1608Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C2286</field>
+        <field name="LCSC Part #">C2286</field>
+      </fields>
+      <libsource lib="Device" part="LED" description="Light emitting diode"/>
+      <property name="LCSC Part #" value="C2286"/>
+      <property name="LCSC Part" value="C2286"/>
+      <property name="Sheetname" value="Stepper2"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Light emitting diode"/>
+      <property name="ki_keywords" value="LED diode"/>
+      <sheetpath names="/Stepper2/" tstamps="/a9029235-dc0e-47ba-826b-288be698a9f2/"/>
+      <tstamps>a456c147-3fee-4e1d-8867-3d1d00b171be</tstamps>
+    </comp>
+    <comp ref="D17">
+      <value>LED</value>
+      <footprint>LED_SMD:LED_0603_1608Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C2286</field>
+        <field name="LCSC Part #">C2286</field>
+      </fields>
+      <libsource lib="Device" part="LED" description="Light emitting diode"/>
+      <property name="LCSC Part #" value="C2286"/>
+      <property name="LCSC Part" value="C2286"/>
+      <property name="Sheetname" value="Stepper2"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Light emitting diode"/>
+      <property name="ki_keywords" value="LED diode"/>
+      <sheetpath names="/Stepper2/" tstamps="/a9029235-dc0e-47ba-826b-288be698a9f2/"/>
+      <tstamps>0117f792-56ce-4dd4-a3fe-aa9ab739fce3</tstamps>
+    </comp>
     <comp ref="R3">
       <value>10k</value>
       <footprint>Resistor_SMD:R_0402_1005Metric</footprint>
@@ -497,6 +1007,125 @@
       <property name="ki_keywords" value="R resistor"/>
       <sheetpath names="/Stepper2/" tstamps="/a9029235-dc0e-47ba-826b-288be698a9f2/"/>
       <tstamps>095d0702-402e-479d-bfcd-a2f1b23d8934</tstamps>
+    </comp>
+    <comp ref="R7">
+      <value>330</value>
+      <footprint>Resistor_SMD:R_0402_1005Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C25104</field>
+        <field name="LCSC Part #">C25104</field>
+      </fields>
+      <libsource lib="Device" part="R_Small" description="Resistor, small symbol"/>
+      <property name="LCSC Part #" value="C25104"/>
+      <property name="LCSC Part" value="C25104"/>
+      <property name="Sheetname" value="Stepper2"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Resistor, small symbol"/>
+      <property name="ki_keywords" value="R resistor"/>
+      <sheetpath names="/Stepper2/" tstamps="/a9029235-dc0e-47ba-826b-288be698a9f2/"/>
+      <tstamps>b887c287-7874-4b08-ae55-ae7041d589b1</tstamps>
+    </comp>
+    <comp ref="R9">
+      <value>330</value>
+      <footprint>Resistor_SMD:R_0402_1005Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C25104</field>
+        <field name="LCSC Part #">C25104</field>
+      </fields>
+      <libsource lib="Device" part="R_Small" description="Resistor, small symbol"/>
+      <property name="LCSC Part #" value="C25104"/>
+      <property name="LCSC Part" value="C25104"/>
+      <property name="Sheetname" value="Stepper2"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Resistor, small symbol"/>
+      <property name="ki_keywords" value="R resistor"/>
+      <sheetpath names="/Stepper2/" tstamps="/a9029235-dc0e-47ba-826b-288be698a9f2/"/>
+      <tstamps>16813941-3dfb-443e-94c2-07b32fd85665</tstamps>
+    </comp>
+    <comp ref="R11">
+      <value>330</value>
+      <footprint>Resistor_SMD:R_0402_1005Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C25104</field>
+        <field name="LCSC Part #">C25104</field>
+      </fields>
+      <libsource lib="Device" part="R_Small" description="Resistor, small symbol"/>
+      <property name="LCSC Part #" value="C25104"/>
+      <property name="LCSC Part" value="C25104"/>
+      <property name="Sheetname" value="Stepper2"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Resistor, small symbol"/>
+      <property name="ki_keywords" value="R resistor"/>
+      <sheetpath names="/Stepper2/" tstamps="/a9029235-dc0e-47ba-826b-288be698a9f2/"/>
+      <tstamps>f732c148-9dde-4633-979d-6e602127b468</tstamps>
+    </comp>
+    <comp ref="R13">
+      <value>330</value>
+      <footprint>Resistor_SMD:R_0402_1005Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C25104</field>
+        <field name="LCSC Part #">C25104</field>
+      </fields>
+      <libsource lib="Device" part="R_Small" description="Resistor, small symbol"/>
+      <property name="LCSC Part #" value="C25104"/>
+      <property name="LCSC Part" value="C25104"/>
+      <property name="Sheetname" value="Stepper2"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Resistor, small symbol"/>
+      <property name="ki_keywords" value="R resistor"/>
+      <sheetpath names="/Stepper2/" tstamps="/a9029235-dc0e-47ba-826b-288be698a9f2/"/>
+      <tstamps>7d2b6809-0bf7-4686-a494-dbf986611313</tstamps>
+    </comp>
+    <comp ref="R15">
+      <value>330</value>
+      <footprint>Resistor_SMD:R_0402_1005Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C25104</field>
+        <field name="LCSC Part #">C25104</field>
+      </fields>
+      <libsource lib="Device" part="R_Small" description="Resistor, small symbol"/>
+      <property name="LCSC Part #" value="C25104"/>
+      <property name="LCSC Part" value="C25104"/>
+      <property name="Sheetname" value="Stepper2"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Resistor, small symbol"/>
+      <property name="ki_keywords" value="R resistor"/>
+      <sheetpath names="/Stepper2/" tstamps="/a9029235-dc0e-47ba-826b-288be698a9f2/"/>
+      <tstamps>73ce56d7-6359-4039-b560-bf53586cba07</tstamps>
+    </comp>
+    <comp ref="R17">
+      <value>330</value>
+      <footprint>Resistor_SMD:R_0402_1005Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C25104</field>
+        <field name="LCSC Part #">C25104</field>
+      </fields>
+      <libsource lib="Device" part="R_Small" description="Resistor, small symbol"/>
+      <property name="LCSC Part #" value="C25104"/>
+      <property name="LCSC Part" value="C25104"/>
+      <property name="Sheetname" value="Stepper2"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Resistor, small symbol"/>
+      <property name="ki_keywords" value="R resistor"/>
+      <sheetpath names="/Stepper2/" tstamps="/a9029235-dc0e-47ba-826b-288be698a9f2/"/>
+      <tstamps>0f883935-43d1-4821-8ab1-b941e8a9b4f1</tstamps>
+    </comp>
+    <comp ref="R21">
+      <value>330</value>
+      <footprint>Resistor_SMD:R_0402_1005Metric</footprint>
+      <fields>
+        <field name="LCSC Part">C25104</field>
+        <field name="LCSC Part #">C25104</field>
+      </fields>
+      <libsource lib="Device" part="R_Small" description="Resistor, small symbol"/>
+      <property name="LCSC Part #" value="C25104"/>
+      <property name="LCSC Part" value="C25104"/>
+      <property name="Sheetname" value="Stepper2"/>
+      <property name="Sheetfile" value="StepperCtl.kicad_sch"/>
+      <property name="ki_description" value="Resistor, small symbol"/>
+      <property name="ki_keywords" value="R resistor"/>
+      <sheetpath names="/Stepper2/" tstamps="/a9029235-dc0e-47ba-826b-288be698a9f2/"/>
+      <tstamps>051735b6-e1e1-42cb-99ef-cb3c79e0b354</tstamps>
     </comp>
     <comp ref="U1">
       <value>~</value>
@@ -716,7 +1345,19 @@
   <nets>
     <net code="1" name="+5V">
       <node ref="C15" pin="1" pintype="passive"/>
+      <node ref="D12" pin="2" pinfunction="A" pintype="passive"/>
+      <node ref="D13" pin="2" pinfunction="A" pintype="passive"/>
+      <node ref="D14" pin="2" pinfunction="A" pintype="passive"/>
+      <node ref="D16" pin="2" pinfunction="A" pintype="passive"/>
+      <node ref="D17" pin="2" pinfunction="A" pintype="passive"/>
       <node ref="J1" pin="1" pinfunction="Pin_1" pintype="passive"/>
+      <node ref="J5" pin="1" pinfunction="Pin_1" pintype="passive"/>
+      <node ref="J5" pin="3" pinfunction="Pin_3" pintype="passive"/>
+      <node ref="J5" pin="5" pinfunction="Pin_5" pintype="passive"/>
+      <node ref="U1" pin="17" pinfunction="nSLEEP" pintype="input"/>
+      <node ref="U1" pin="18" pinfunction="ENABLE" pintype="input"/>
+      <node ref="U2" pin="17" pinfunction="nSLEEP" pintype="input"/>
+      <node ref="U2" pin="18" pinfunction="ENABLE" pintype="input"/>
       <node ref="XA1" pin="5V1" pinfunction="5V" pintype="power_in"/>
     </net>
     <net code="2" name="+12V">
@@ -750,10 +1391,9 @@
     </net>
     <net code="6" name="/Stepper1/DVDD">
       <node ref="C8" pin="1" pintype="passive"/>
+      <node ref="D10" pin="2" pinfunction="A" pintype="passive"/>
       <node ref="R2" pin="1" pintype="passive"/>
       <node ref="U2" pin="14" pinfunction="DVDD" pintype="output"/>
-      <node ref="U2" pin="17" pinfunction="nSLEEP" pintype="input"/>
-      <node ref="U2" pin="18" pinfunction="ENABLE" pintype="input"/>
       <node ref="U2" pin="21" pinfunction="M0" pintype="input"/>
       <node ref="U2" pin="24" pinfunction="DECAY" pintype="input"/>
     </net>
@@ -783,10 +1423,9 @@
     </net>
     <net code="13" name="/Stepper2/DVDD">
       <node ref="C13" pin="1" pintype="passive"/>
+      <node ref="D11" pin="2" pinfunction="A" pintype="passive"/>
       <node ref="R3" pin="1" pintype="passive"/>
       <node ref="U1" pin="14" pinfunction="DVDD" pintype="output"/>
-      <node ref="U1" pin="17" pinfunction="nSLEEP" pintype="input"/>
-      <node ref="U1" pin="18" pinfunction="ENABLE" pintype="input"/>
       <node ref="U1" pin="21" pinfunction="M0" pintype="input"/>
       <node ref="U1" pin="24" pinfunction="DECAY" pintype="input"/>
     </net>
@@ -802,7 +1441,22 @@
       <node ref="R3" pin="2" pintype="passive"/>
       <node ref="U1" pin="15" pinfunction="nFAULT" pintype="output"/>
     </net>
-    <net code="17" name="GND">
+    <net code="17" name="D6">
+      <node ref="D15" pin="2" pinfunction="A" pintype="passive"/>
+      <node ref="J5" pin="6" pinfunction="Pin_6" pintype="passive"/>
+      <node ref="XA1" pin="D6" pinfunction="D6" pintype="bidirectional"/>
+    </net>
+    <net code="18" name="D7">
+      <node ref="D18" pin="2" pinfunction="A" pintype="passive"/>
+      <node ref="J5" pin="4" pinfunction="Pin_4" pintype="passive"/>
+      <node ref="XA1" pin="D7" pinfunction="D7" pintype="bidirectional"/>
+    </net>
+    <net code="19" name="D8">
+      <node ref="D19" pin="2" pinfunction="A" pintype="passive"/>
+      <node ref="J5" pin="2" pinfunction="Pin_2" pintype="passive"/>
+      <node ref="XA1" pin="D8" pinfunction="D8" pintype="bidirectional"/>
+    </net>
+    <net code="20" name="GND">
       <node ref="C10" pin="2" pintype="passive"/>
       <node ref="C11" pin="2" pintype="passive"/>
       <node ref="C12" pin="2" pintype="passive"/>
@@ -817,8 +1471,26 @@
       <node ref="J1" pin="6" pinfunction="Pin_6" pintype="passive"/>
       <node ref="J4" pin="1" pinfunction="Pin_1" pintype="passive"/>
       <node ref="R1" pin="2" pintype="passive"/>
+      <node ref="R10" pin="2" pintype="passive"/>
+      <node ref="R11" pin="2" pintype="passive"/>
+      <node ref="R12" pin="2" pintype="passive"/>
+      <node ref="R13" pin="2" pintype="passive"/>
+      <node ref="R14" pin="2" pintype="passive"/>
+      <node ref="R15" pin="2" pintype="passive"/>
+      <node ref="R16" pin="2" pintype="passive"/>
+      <node ref="R17" pin="2" pintype="passive"/>
+      <node ref="R18" pin="2" pintype="passive"/>
+      <node ref="R19" pin="2" pintype="passive"/>
+      <node ref="R20" pin="2" pintype="passive"/>
+      <node ref="R21" pin="2" pintype="passive"/>
+      <node ref="R22" pin="2" pintype="passive"/>
+      <node ref="R23" pin="2" pintype="passive"/>
       <node ref="R4" pin="2" pintype="passive"/>
       <node ref="R5" pin="2" pintype="passive"/>
+      <node ref="R6" pin="2" pintype="passive"/>
+      <node ref="R7" pin="2" pintype="passive"/>
+      <node ref="R8" pin="2" pintype="passive"/>
+      <node ref="R9" pin="2" pintype="passive"/>
       <node ref="U1" pin="12" pinfunction="GND" pintype="passive"/>
       <node ref="U1" pin="22" pinfunction="M1" pintype="input"/>
       <node ref="U1" pin="23" pinfunction="TRQ" pintype="input"/>
@@ -833,148 +1505,219 @@
       <node ref="XA1" pin="GND2" pinfunction="GND" pintype="power_in"/>
       <node ref="XA1" pin="GND3" pinfunction="GND" pintype="power_in"/>
     </net>
-    <net code="18" name="Net-(D1-K)">
+    <net code="21" name="Net-(D1-K)">
       <node ref="D1" pin="1" pinfunction="K" pintype="passive"/>
       <node ref="R5" pin="1" pintype="passive"/>
     </net>
-    <net code="19" name="S1_AOUT1">
+    <net code="22" name="Net-(D2-K)">
+      <node ref="D2" pin="1" pinfunction="K" pintype="passive"/>
+      <node ref="R6" pin="1" pintype="passive"/>
+    </net>
+    <net code="23" name="Net-(D3-K)">
+      <node ref="D3" pin="1" pinfunction="K" pintype="passive"/>
+      <node ref="R7" pin="1" pintype="passive"/>
+    </net>
+    <net code="24" name="Net-(D4-K)">
+      <node ref="D4" pin="1" pinfunction="K" pintype="passive"/>
+      <node ref="R8" pin="1" pintype="passive"/>
+    </net>
+    <net code="25" name="Net-(D5-K)">
+      <node ref="D5" pin="1" pinfunction="K" pintype="passive"/>
+      <node ref="R9" pin="1" pintype="passive"/>
+    </net>
+    <net code="26" name="Net-(D6-K)">
+      <node ref="D6" pin="1" pinfunction="K" pintype="passive"/>
+      <node ref="R10" pin="1" pintype="passive"/>
+    </net>
+    <net code="27" name="Net-(D7-K)">
+      <node ref="D7" pin="1" pinfunction="K" pintype="passive"/>
+      <node ref="R11" pin="1" pintype="passive"/>
+    </net>
+    <net code="28" name="Net-(D8-K)">
+      <node ref="D8" pin="1" pinfunction="K" pintype="passive"/>
+      <node ref="R12" pin="1" pintype="passive"/>
+    </net>
+    <net code="29" name="Net-(D9-K)">
+      <node ref="D9" pin="1" pinfunction="K" pintype="passive"/>
+      <node ref="R13" pin="1" pintype="passive"/>
+    </net>
+    <net code="30" name="Net-(D10-K)">
+      <node ref="D10" pin="1" pinfunction="K" pintype="passive"/>
+      <node ref="R14" pin="1" pintype="passive"/>
+    </net>
+    <net code="31" name="Net-(D11-K)">
+      <node ref="D11" pin="1" pinfunction="K" pintype="passive"/>
+      <node ref="R15" pin="1" pintype="passive"/>
+    </net>
+    <net code="32" name="Net-(D12-K)">
+      <node ref="D12" pin="1" pinfunction="K" pintype="passive"/>
+      <node ref="R16" pin="1" pintype="passive"/>
+    </net>
+    <net code="33" name="Net-(D13-K)">
+      <node ref="D13" pin="1" pinfunction="K" pintype="passive"/>
+      <node ref="R17" pin="1" pintype="passive"/>
+    </net>
+    <net code="34" name="Net-(D14-K)">
+      <node ref="D14" pin="1" pinfunction="K" pintype="passive"/>
+      <node ref="R18" pin="1" pintype="passive"/>
+    </net>
+    <net code="35" name="Net-(D15-K)">
+      <node ref="D15" pin="1" pinfunction="K" pintype="passive"/>
+      <node ref="R19" pin="1" pintype="passive"/>
+    </net>
+    <net code="36" name="Net-(D16-K)">
+      <node ref="D16" pin="1" pinfunction="K" pintype="passive"/>
+      <node ref="R20" pin="1" pintype="passive"/>
+    </net>
+    <net code="37" name="Net-(D17-K)">
+      <node ref="D17" pin="1" pinfunction="K" pintype="passive"/>
+      <node ref="R21" pin="1" pintype="passive"/>
+    </net>
+    <net code="38" name="Net-(D18-K)">
+      <node ref="D18" pin="1" pinfunction="K" pintype="passive"/>
+      <node ref="R22" pin="1" pintype="passive"/>
+    </net>
+    <net code="39" name="Net-(D19-K)">
+      <node ref="D19" pin="1" pinfunction="K" pintype="passive"/>
+      <node ref="R23" pin="1" pintype="passive"/>
+    </net>
+    <net code="40" name="S1_AOUT1">
+      <node ref="D8" pin="2" pinfunction="A" pintype="passive"/>
       <node ref="J2" pin="1" pinfunction="Pin_1" pintype="passive"/>
       <node ref="U2" pin="5" pinfunction="AOUT1" pintype="output"/>
     </net>
-    <net code="20" name="S1_AOUT2">
+    <net code="41" name="S1_AOUT2">
+      <node ref="D6" pin="2" pinfunction="A" pintype="passive"/>
       <node ref="J2" pin="2" pinfunction="Pin_2" pintype="passive"/>
       <node ref="U2" pin="7" pinfunction="AOUT2" pintype="output"/>
     </net>
-    <net code="21" name="S1_BOUT1">
+    <net code="42" name="S1_BOUT1">
+      <node ref="D2" pin="2" pinfunction="A" pintype="passive"/>
       <node ref="J2" pin="4" pinfunction="Pin_4" pintype="passive"/>
       <node ref="U2" pin="10" pinfunction="BOUT1" pintype="output"/>
     </net>
-    <net code="22" name="S1_BOUT2">
+    <net code="43" name="S1_BOUT2">
+      <node ref="D4" pin="2" pinfunction="A" pintype="passive"/>
       <node ref="J2" pin="3" pinfunction="Pin_3" pintype="passive"/>
       <node ref="U2" pin="8" pinfunction="BOUT2" pintype="output"/>
     </net>
-    <net code="23" name="S1_DIR">
+    <net code="44" name="S1_DIR">
       <node ref="U2" pin="20" pinfunction="DIR" pintype="input"/>
       <node ref="XA1" pin="D4" pinfunction="D4" pintype="bidirectional"/>
     </net>
-    <net code="24" name="S1_STEP">
+    <net code="45" name="S1_STEP">
       <node ref="U2" pin="19" pinfunction="STEP" pintype="input"/>
       <node ref="XA1" pin="D5" pinfunction="D5" pintype="bidirectional"/>
     </net>
-    <net code="25" name="S2_AOUT1">
+    <net code="46" name="S2_AOUT1">
+      <node ref="D9" pin="2" pinfunction="A" pintype="passive"/>
       <node ref="J3" pin="1" pinfunction="Pin_1" pintype="passive"/>
       <node ref="U1" pin="5" pinfunction="AOUT1" pintype="output"/>
     </net>
-    <net code="26" name="S2_AOUT2">
+    <net code="47" name="S2_AOUT2">
+      <node ref="D7" pin="2" pinfunction="A" pintype="passive"/>
       <node ref="J3" pin="2" pinfunction="Pin_2" pintype="passive"/>
       <node ref="U1" pin="7" pinfunction="AOUT2" pintype="output"/>
     </net>
-    <net code="27" name="S2_BOUT1">
+    <net code="48" name="S2_BOUT1">
+      <node ref="D3" pin="2" pinfunction="A" pintype="passive"/>
       <node ref="J3" pin="4" pinfunction="Pin_4" pintype="passive"/>
       <node ref="U1" pin="10" pinfunction="BOUT1" pintype="output"/>
     </net>
-    <net code="28" name="S2_BOUT2">
+    <net code="49" name="S2_BOUT2">
+      <node ref="D5" pin="2" pinfunction="A" pintype="passive"/>
       <node ref="J3" pin="3" pinfunction="Pin_3" pintype="passive"/>
       <node ref="U1" pin="8" pinfunction="BOUT2" pintype="output"/>
     </net>
-    <net code="29" name="S2_DIR">
+    <net code="50" name="S2_DIR">
       <node ref="U1" pin="20" pinfunction="DIR" pintype="input"/>
       <node ref="XA1" pin="D2" pinfunction="D2_INT0" pintype="bidirectional"/>
     </net>
-    <net code="30" name="S2_STEP">
+    <net code="51" name="S2_STEP">
       <node ref="U1" pin="19" pinfunction="STEP" pintype="input"/>
       <node ref="XA1" pin="D3" pinfunction="D3_INT1" pintype="bidirectional"/>
     </net>
-    <net code="31" name="SCL">
+    <net code="52" name="SCL">
       <node ref="J1" pin="4" pinfunction="Pin_4" pintype="passive"/>
       <node ref="XA1" pin="SCL" pinfunction="SCL" pintype="bidirectional"/>
     </net>
-    <net code="32" name="SDA">
+    <net code="53" name="SDA">
       <node ref="J1" pin="5" pinfunction="Pin_5" pintype="passive"/>
       <node ref="XA1" pin="SDA" pinfunction="SDA" pintype="bidirectional"/>
     </net>
-    <net code="33" name="unconnected-(J1-Pin_2-Pad2)">
+    <net code="54" name="unconnected-(J1-Pin_2-Pad2)">
       <node ref="J1" pin="2" pinfunction="Pin_2" pintype="passive+no_connect"/>
     </net>
-    <net code="34" name="unconnected-(J1-Pin_3-Pad3)">
+    <net code="55" name="unconnected-(J1-Pin_3-Pad3)">
       <node ref="J1" pin="3" pinfunction="Pin_3" pintype="passive+no_connect"/>
     </net>
-    <net code="35" name="unconnected-(XA1-3.3V-Pad3V3)">
+    <net code="56" name="unconnected-(XA1-3.3V-Pad3V3)">
       <node ref="XA1" pin="3V3" pinfunction="3.3V" pintype="power_out+no_connect"/>
     </net>
-    <net code="36" name="unconnected-(XA1-D0_RX0-PadD0)">
+    <net code="57" name="unconnected-(XA1-D0_RX0-PadD0)">
       <node ref="XA1" pin="D0" pinfunction="D0_RX0" pintype="bidirectional+no_connect"/>
     </net>
-    <net code="37" name="unconnected-(XA1-D1_TX0-PadD1)">
+    <net code="58" name="unconnected-(XA1-D1_TX0-PadD1)">
       <node ref="XA1" pin="D1" pinfunction="D1_TX0" pintype="bidirectional+no_connect"/>
     </net>
-    <net code="38" name="unconnected-(XA1-D10_CS-PadD10)">
+    <net code="59" name="unconnected-(XA1-D10_CS-PadD10)">
       <node ref="XA1" pin="D10" pinfunction="D10_CS" pintype="bidirectional+no_connect"/>
     </net>
-    <net code="39" name="unconnected-(XA1-IOREF-PadIORF)">
+    <net code="60" name="unconnected-(XA1-IOREF-PadIORF)">
       <node ref="XA1" pin="IORF" pinfunction="IOREF" pintype="output+no_connect"/>
     </net>
-    <net code="40" name="unconnected-(XA1-PadA0)">
+    <net code="61" name="unconnected-(XA1-PadA0)">
       <node ref="XA1" pin="A0" pinfunction="A0" pintype="bidirectional+no_connect"/>
     </net>
-    <net code="41" name="unconnected-(XA1-PadA1)">
+    <net code="62" name="unconnected-(XA1-PadA1)">
       <node ref="XA1" pin="A1" pinfunction="A1" pintype="bidirectional+no_connect"/>
     </net>
-    <net code="42" name="unconnected-(XA1-PadA2)">
+    <net code="63" name="unconnected-(XA1-PadA2)">
       <node ref="XA1" pin="A2" pinfunction="A2" pintype="bidirectional+no_connect"/>
     </net>
-    <net code="43" name="unconnected-(XA1-PadA3)">
+    <net code="64" name="unconnected-(XA1-PadA3)">
       <node ref="XA1" pin="A3" pinfunction="A3" pintype="bidirectional+no_connect"/>
     </net>
-    <net code="44" name="unconnected-(XA1-PadA4)">
+    <net code="65" name="unconnected-(XA1-PadA4)">
       <node ref="XA1" pin="A4" pinfunction="A4" pintype="bidirectional+no_connect"/>
     </net>
-    <net code="45" name="unconnected-(XA1-PadA5)">
+    <net code="66" name="unconnected-(XA1-PadA5)">
       <node ref="XA1" pin="A5" pinfunction="A5" pintype="bidirectional+no_connect"/>
     </net>
-    <net code="46" name="unconnected-(XA1-PadAREF)">
+    <net code="67" name="unconnected-(XA1-PadAREF)">
       <node ref="XA1" pin="AREF" pinfunction="AREF" pintype="input+no_connect"/>
     </net>
-    <net code="47" name="unconnected-(XA1-PadD6)">
-      <node ref="XA1" pin="D6" pinfunction="D6" pintype="bidirectional+no_connect"/>
-    </net>
-    <net code="48" name="unconnected-(XA1-PadD7)">
-      <node ref="XA1" pin="D7" pinfunction="D7" pintype="bidirectional+no_connect"/>
-    </net>
-    <net code="49" name="unconnected-(XA1-PadD8)">
-      <node ref="XA1" pin="D8" pinfunction="D8" pintype="bidirectional+no_connect"/>
-    </net>
-    <net code="50" name="unconnected-(XA1-PadD9)">
+    <net code="68" name="unconnected-(XA1-PadD9)">
       <node ref="XA1" pin="D9" pinfunction="D9" pintype="bidirectional+no_connect"/>
     </net>
-    <net code="51" name="unconnected-(XA1-PadD11)">
+    <net code="69" name="unconnected-(XA1-PadD11)">
       <node ref="XA1" pin="D11" pinfunction="D11" pintype="bidirectional+no_connect"/>
     </net>
-    <net code="52" name="unconnected-(XA1-PadD12)">
+    <net code="70" name="unconnected-(XA1-PadD12)">
       <node ref="XA1" pin="D12" pinfunction="D12" pintype="bidirectional+no_connect"/>
     </net>
-    <net code="53" name="unconnected-(XA1-PadD13)">
+    <net code="71" name="unconnected-(XA1-PadD13)">
       <node ref="XA1" pin="D13" pinfunction="D13" pintype="bidirectional+no_connect"/>
     </net>
-    <net code="54" name="unconnected-(XA1-RESET-PadRST1)">
+    <net code="72" name="unconnected-(XA1-RESET-PadRST1)">
       <node ref="XA1" pin="RST1" pinfunction="RESET" pintype="open_collector+no_connect"/>
     </net>
-    <net code="55" name="unconnected-(XA1-SPI_5V-Pad5V2)">
+    <net code="73" name="unconnected-(XA1-SPI_5V-Pad5V2)">
       <node ref="XA1" pin="5V2" pinfunction="SPI_5V" pintype="power_in+no_connect"/>
     </net>
-    <net code="56" name="unconnected-(XA1-SPI_GND-PadGND4)">
+    <net code="74" name="unconnected-(XA1-SPI_GND-PadGND4)">
       <node ref="XA1" pin="GND4" pinfunction="SPI_GND" pintype="power_in+no_connect"/>
     </net>
-    <net code="57" name="unconnected-(XA1-SPI_MISO-PadMISO)">
+    <net code="75" name="unconnected-(XA1-SPI_MISO-PadMISO)">
       <node ref="XA1" pin="MISO" pinfunction="SPI_MISO" pintype="input+no_connect"/>
     </net>
-    <net code="58" name="unconnected-(XA1-SPI_MOSI-PadMOSI)">
+    <net code="76" name="unconnected-(XA1-SPI_MOSI-PadMOSI)">
       <node ref="XA1" pin="MOSI" pinfunction="SPI_MOSI" pintype="output+no_connect"/>
     </net>
-    <net code="59" name="unconnected-(XA1-SPI_RESET-PadRST2)">
+    <net code="77" name="unconnected-(XA1-SPI_RESET-PadRST2)">
       <node ref="XA1" pin="RST2" pinfunction="SPI_RESET" pintype="open_collector+no_connect"/>
     </net>
-    <net code="60" name="unconnected-(XA1-SPI_SCK-PadSCK)">
+    <net code="78" name="unconnected-(XA1-SPI_SCK-PadSCK)">
       <node ref="XA1" pin="SCK" pinfunction="SPI_SCK" pintype="output+no_connect"/>
     </net>
   </nets>
