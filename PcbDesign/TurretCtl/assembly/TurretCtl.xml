@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <export version="E">
   <design>
-    <source>C:\Users\knigh\Documents\GitHub\afv\PcbDesign\TurretCtl\TurretCtl.kicad_sch</source>
-    <date>4/12/2023 3:32:02 AM</date>
+    <source>C:\Users\knigh\Documents\Github\afv\PcbDesign\TurretCtl\TurretCtl.kicad_sch</source>
+    <date>4/12/2023 12:24:20 PM</date>
     <tool>Eeschema (7.0.0)</tool>
     <sheet number="1" name="/" tstamps="/">
       <title_block>
@@ -1430,7 +1430,10 @@
       <uri>C:\Program Files\KiCad\7.0\share\kicad\symbols\/Device.kicad_sym</uri>
     </library>
     <library logical="ProjLib">
-      <uri>C:\Users\knigh\Documents\GitHub\afv\PcbDesign\TurretCtl/ProjLib.kicad_sym</uri>
+      <uri>C:\Users\knigh\Documents\Github\afv\PcbDesign\TurretCtl/ProjLib.kicad_sym</uri>
+    </library>
+    <library logical="arduino-library">
+      <uri>C:\Users\knigh\OneDrive\Documents\KiCad\7.0\3rdparty/symbols/com_github_alarm-siren_arduino-kicad-library/arduino-library.kicad_sym</uri>
     </library>
   </libraries>
   <nets>
