@@ -6,24 +6,19 @@ pub const PUMP_REFRESH_BUDGET: u32 = 3000;
 
 pub struct MainCtl{
     socket: Socket,
-    pump_refresh_budget: u32,
-    pump_status: bool,
     server_connected: bool,
-    pump: Pin<Output, PD2>,
 }
 
 impl MainCtl{
-    pub fn new(socket: Socket, pump_pin: Pin<Output, PD2>) -> MainCtl {
+    
+    pub fn new(socket: Socket) -> MainCtl {
         Self{
             socket,
-            pump_status: Default::default(),
-            pump_refresh_budget: PUMP_REFRESH_BUDGET,
             server_connected: false,
-            pump: pump_pin,
         }
     }
     /// Will update and conduct all internal systems in a non-blocking manner
-    pub fn process(&mut self, serial: &mut Usart0<MHz16>, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>){
+    pub fn process(&mut self, serial: &mut Usart0<MHz16>, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> bool{
         // let _ = ufmt::uwriteln!(serial, "MAIN CTL: Server Status {:?}", self.socket.read_status(spi, cs));
         if self.socket.server_connected(spi, cs){
             if !self.server_connected{
@@ -34,20 +29,10 @@ impl MainCtl{
                 match msg{
                     InternalMessage::Ping(p) => {
                         let _ = ufmt::uwriteln!(serial, "MAIN CTL: pinged with {}", p);
-                        self.socket.send(msg, spi, cs);
+                        // self.socket.send(msg, spi, cs);
+                        return true;
                     },
-                    InternalMessage::PumpState(state) => {
-                        if state {
-                            self.pump_refresh_budget = PUMP_REFRESH_BUDGET;
-                            if !self.pump_status{
-                                let _ = ufmt::uwriteln!(serial, "MAIN CTL: pump activatd");
-                                self.pump_status = true;
-                            }
-                        }
-                        else{
-                            self.pump_refresh_budget = 0;
-                        }
-                    },
+                    InternalMessage::FlirSignatureOffset(_) => todo!(),
                 }
             }
         }
@@ -57,24 +42,6 @@ impl MainCtl{
                 self.server_connected = false;
             }
         }
-
-
-
-        if self.pump_refresh_budget > 0{
-            self.pump_refresh_budget -= 1;
-        }
-        else{
-            if self.pump_status{
-                let _ = ufmt::uwriteln!(serial, "MAIN CTL: pump deactivated");
-                self.pump_status = false;
-            }
-        }
-
-        if self.pump_status{
-            self.pump.set_high();
-        }
-        else{
-            self.pump.set_low();
-        }
+        false
     }
 }

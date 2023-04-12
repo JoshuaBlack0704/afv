@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, net::SocketAddr};
 
 use async_trait::async_trait;
 use rand::{thread_rng, Rng};
@@ -44,16 +44,25 @@ impl NetworkBridge{
             Ok(i) => {
                 match i.ipv4.first(){
                     Some(i) => {
+                        println!("Tcp server using up {:?}", i);
                         i.addr
                     },
-                    None => return None,
+                    None => {
+                        println!("Tcp server no ip");
+                        return None;
+                    },
                 }
             },
-            Err(_) => return None,
+            Err(e) => {
+                println!("Tcp server error {}", e);
+                return None;
+            },
         };
         
         if let Ok(l) = TcpListener::bind((ip, port)).await{
+            println!("Tcp server bound to {}", SocketAddr::from((ip, port)));
             if let Ok((s,_)) = l.accept().await{
+                println!("Tcp server link {} -> {}", s.local_addr().unwrap(), s.peer_addr().unwrap());
                 return Some(Self::new(bus, s, true).await);
             }
         }

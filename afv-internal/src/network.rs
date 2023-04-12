@@ -6,7 +6,7 @@ use crate::SOCKET_MSG_SIZE;
 #[derive(uDebug, Serialize, Deserialize, Clone, Copy)]
 pub enum InternalMessage{
     Ping(u8),
-    PumpState(bool),
+    FlirSignatureOffset([u8;2])
 }
 
 impl InternalMessage{

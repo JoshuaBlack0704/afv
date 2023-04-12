@@ -1,7 +1,7 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use afv_internal::FLIRTURRETPORT;
-use tokio::{sync::Mutex, net::TcpStream};
+use tokio::{sync::Mutex, net::TcpStream, time::{sleep, Duration}};
 
 use crate::network::{socket::Socket, scanner::ScanBuilder, Network, Local};
 
@@ -41,10 +41,13 @@ impl FlirTurret<Local>{
 
         // For testing only
         loop{
-            let _ = self.socket.lock().await.as_ref().unwrap().clone().read_byte().await;
+            println!("Pinging flir turret");
+            let msg = afv_internal::network::InternalMessage::Ping(100).to_msg().unwrap();
+            let _ = self.socket.lock().await.as_ref().unwrap().clone().write_data(&msg).await;
+            sleep(Duration::from_secs(1)).await;
         }
     }
-    
+
 }
 
 impl FlirTurret<Network>{

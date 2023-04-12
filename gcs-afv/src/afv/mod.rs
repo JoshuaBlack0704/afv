@@ -14,6 +14,7 @@ mod flir;
 
 #[derive(Parser, Debug)]
 pub struct AfvArgs{
+    #[arg(short)]
     connect: Option<SocketAddr>,
 }
 

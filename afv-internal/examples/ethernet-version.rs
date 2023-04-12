@@ -8,10 +8,10 @@ use arduino_hal::Spi;
 use embedded_hal::spi::{Polarity, Phase};
 use panic_halt as _;
 
-const GATEWAY: [u8;4] = [169,254,80,1];
+const GATEWAY: [u8;4] = [192,168,4,1];
 const SUBNET: [u8;4] = [255,255,255,0];
 const MAC: [u8;6] = [0x00,0x08,0xdc,0x01,0x02,0x03];
-const IP: [u8;4] = [169,254,80,100];
+const IP: [u8;4] = [192,168,4,20];
 
 #[arduino_hal::entry]
 fn main() -> ! {
@@ -52,10 +52,28 @@ fn main() -> ! {
 
     let mode = socket_register::Mode::default().set_protocol_tcp();
     let socket0 = W5500::socket_n(SocketBlock::SOCKET0, mode, FLIRTURRETPORT, &mut spi, &mut cs);
-    let mut mainctl = MainCtl::new(socket0, pins.d2.into_output());
+    let mut mainctl = MainCtl::new(socket0);
+
+    let mut pin5 = pins.d5.into_output();
+    let mut pin4 = pins.d4.into_output();
+    pin4.set_low();
+    let mut pin3 = pins.d3.into_output();
+    let mut pin2 = pins.d2.into_output();
+    pin2.set_low();
 
     loop {
-        mainctl.process(&mut serial, &mut spi, &mut cs);
-
+        if mainctl.process(&mut serial, &mut spi, &mut cs){
+            for _ in  0..200{
+                arduino_hal::delay_ms(1);
+                for _ in 0..16{
+                    pin5.set_high();
+                    pin3.set_high();
+                    arduino_hal::delay_us(20);
+                    pin5.set_low();
+                    pin3.set_low();
+                    arduino_hal::delay_us(20);
+                }
+            }
+        }
     }
 }

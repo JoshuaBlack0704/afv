@@ -87,8 +87,8 @@ impl ScanBuilder{
                         if net.addr().is_loopback(){continue;}
                         // We debug its name
                         match &interface.friendly_name{
-                            Some(n) => println!("Scan {} using interface {}", scan_id, *n),
-                            None => println!("Scan {} using interface {}", scan_id, interface.name),
+                            Some(n) => println!("Scan {} using interface {} with address {}", scan_id, *n, net.addr()),
+                            None => println!("Scan {} using interface {} with address {}", scan_id, interface.name, net.addr()),
                         }
                         interface_nets.push(net);
                     }
@@ -104,7 +104,6 @@ impl ScanBuilder{
 
             // Now we begin the net search
             for net in interface_nets{
-
                 for host in net.hosts(){
                     for &port in self.tgt_ports.iter(){
                         let tgt = SocketAddr::from((host, port));
