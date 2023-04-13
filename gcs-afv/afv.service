@@ -3,7 +3,7 @@ description="Afv system"
 After=network-up.target
 
 [Service]
-/home/afv/git/afv/gcs-afv/target/debug/afv -c 192.168.4.101:4040
+ExecStart=/home/afv/git/afv/gcs-afv/target/debug/afv -c 192.168.4.101:4040
 
 [Install]
 WantedBy=mutli-user.target
