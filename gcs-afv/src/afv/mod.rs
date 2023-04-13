@@ -92,7 +92,7 @@ impl Afv<Actuated>{
             match args.connect{
                 Some(addr) => {
                     println!("Afv connecting");
-                    NetworkBridge::client(&bus, &addr).await;
+                    while let None = NetworkBridge::client(&bus, &addr).await{}
                     println!("Afv connected");
                 },
                 None => {

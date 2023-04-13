@@ -62,7 +62,6 @@ fn main() -> ! {
     pin2.set_low();
 
     loop {
-        if mainctl.process(&mut serial, &mut spi, &mut cs){
             for _ in  0..200{
                 arduino_hal::delay_ms(1);
                 for _ in 0..16{
@@ -74,6 +73,7 @@ fn main() -> ! {
                     arduino_hal::delay_us(20);
                 }
             }
+        if mainctl.process(&mut serial, &mut spi, &mut cs){
         }
     }
 }

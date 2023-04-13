@@ -1,9 +1,9 @@
-[unit]
-description="Afv system"
-After=network-up.target
+[Unit]
+Description="Afv Control System"
+After=network.target
 
 [Service]
 ExecStart=/home/afv/git/afv/gcs-afv/target/debug/afv -c 192.168.4.101:4040
 
 [Install]
-WantedBy=mutli-user.target
+WantedBy=multi-user.target
