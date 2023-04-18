@@ -1,5 +1,6 @@
 use std::{net::SocketAddr, sync::Arc};
 
+use log::info;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{
@@ -17,7 +18,7 @@ pub struct Socket {
     rd: Arc<Mutex<OwnedReadHalf>>,
     wr: Arc<Mutex<OwnedWriteHalf>>,
     peer: SocketAddr,
-    ip: SocketAddr,
+    local: SocketAddr,
 }
 
 impl Socket {
@@ -31,7 +32,7 @@ impl Socket {
             wr: Arc::new(Mutex::new(wr)),
             peer,
             server,
-            ip,
+            local: ip,
         }
     }
 
@@ -41,7 +42,7 @@ impl Socket {
     pub async fn get_writer(&self) -> MutexGuard<OwnedWriteHalf> {
         self.wr.lock().await
     }
-    pub async fn read_byte(self) -> u8 {
+    pub async fn read_byte(&self) -> u8 {
         loop {
             let mut rd = self.get_reader().await;
 
@@ -57,16 +58,22 @@ impl Socket {
     pub async fn write_data(&self, data: &[u8]) {
         let _ = self.get_writer().await.write(data).await;
     }
-    async fn reconnect(self) {
-        println!("Socket has disconnected from {}", self.peer);
+    pub fn peer_addr(&self) -> SocketAddr {
+        self.peer
+    }
+    pub fn local_addr(&self) -> SocketAddr {
+        self.local
+    }
+    async fn reconnect(&self) {
+        info!("Socket has disconnected from {}", self.peer);
         let mut rd = self.get_reader().await;
         let mut wr = self.get_writer().await;
 
         loop {
             if self.server {
-                if let Ok(l) = TcpListener::bind((self.ip.ip(), self.ip.port())).await {
+                if let Ok(l) = TcpListener::bind((self.local.ip(), self.local.port())).await {
                     if let Ok((s, _)) = l.accept().await {
-                        println!("Socket server has reconnected to {}", self.peer);
+                        info!("Socket server has reconnected to {}", self.peer);
                         (*rd, *wr) = s.into_split();
                         return;
                     }
@@ -75,7 +82,7 @@ impl Socket {
             }
             match TcpStream::connect(self.peer).await {
                 Ok(s) => {
-                    println!("Socket client has reconnected to {}", self.peer);
+                    info!("Socket client has reconnected to {}", self.peer);
                     (*rd, *wr) = s.into_split();
                     return;
                 }

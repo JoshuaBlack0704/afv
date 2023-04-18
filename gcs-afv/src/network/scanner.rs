@@ -3,6 +3,7 @@ use std::{collections::HashSet, net::SocketAddr, sync::Arc};
 use default_net::get_interfaces;
 use flume::Sender;
 use ipnet::Ipv4Net;
+use log::{info, debug};
 use rand::{thread_rng, Rng};
 use tokio::{
     net::{TcpSocket, TcpStream},
@@ -43,11 +44,21 @@ impl ScanBuilder {
     }
     async fn scan(self, tx: Sender<TcpStream>) {
         // First we pull the interfaces
-        let interfaces = get_interfaces();
+        let mut interfaces = match default_net::get_default_interface(){
+            Ok(i) => vec![i],
+            Err(_) => vec![],
+        };
+        'outer: for new_i in get_interfaces(){
+            for old_i in interfaces.iter(){
+                if new_i.name == old_i.name{
+                    continue 'outer;
+                }
+            }
+            interfaces.push(new_i);
+        }
 
         // Just used for debugging
         let scan_id = thread_rng().gen::<u16>();
-        println!("Scan {} started", scan_id);
 
         // Now we need to set our scan budget
         let mut scan_budget = match self.scan_count {
@@ -73,10 +84,10 @@ impl ScanBuilder {
             // We need to consume a scan
             match self.scan_count {
                 ScanCount::Infinite => {
-                    println!("Scan {} restarting", scan_id);
+                    info!("Scan {} running", scan_id);
                 }
                 ScanCount::Limited(_) => {
-                    println!("Scan {}, {} remaining scans", scan_id, scan_budget);
+                    info!("Scan {}, {} remaining scans", scan_id, scan_budget);
                     scan_budget -= 1;
                 }
             };
@@ -92,13 +103,13 @@ impl ScanBuilder {
                         }
                         // We debug its name
                         match &interface.friendly_name {
-                            Some(n) => println!(
+                            Some(n) => debug!(
                                 "Scan {} using interface {} with address {}",
                                 scan_id,
                                 *n,
                                 net.addr()
                             ),
-                            None => println!(
+                            None => debug!(
                                 "Scan {} using interface {} with address {}",
                                 scan_id,
                                 interface.name,
@@ -156,7 +167,7 @@ impl ScanBuilder {
                             }
                             if let Ok(s) = socket.connect(tgt).await {
                                 if let Ok(addr) = s.peer_addr() {
-                                    println!("Scanner found peer at {}", addr)
+                                    info!("Scanner found peer at {}", addr)
                                 }
                                 let _ = tx.send_async(s).await;
                             }
@@ -165,7 +176,7 @@ impl ScanBuilder {
                 }
             }
 
-            println!("Scan {} started {} connect tasks", scan_id, task_count);
+            debug!("Scan {} started {} connect tasks", scan_id, task_count);
 
             drop(socket_tx);
             // This will complete with an error when the last _signal is dropped in
@@ -174,7 +185,7 @@ impl ScanBuilder {
 
             // We are now finished with a scan round
             // we will wait for the specified wait time
-            println!("Scan {} round completed", scan_id);
+            info!("Scan {} round completed", scan_id);
             if tx.is_disconnected() {
                 return;
             }
