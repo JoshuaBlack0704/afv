@@ -1,6 +1,8 @@
 use serde::{Serialize, Deserialize};
 
-use crate::{drivers::{flir::FlirDriverMessage, turret::TurretDriverMessage, lidar::LidarDriverMessage, pump::PumpDriverMessage, siren::SirenDriverMessage, lights::LightsDriverMessage}, operators::{flir::FlirOperatorMessage, nozzle::NozzleOperatorMessage, pump::PumpOperatorMessage}};
+use crate::{drivers::{flir::FlirDriverMessage, turret::TurretDriverMessage, lidar::LidarDriverMessage, pump::PumpDriverMessage, siren::SirenDriverMessage, lights::LightsDriverMessage}, operators::{flir::FlirOperatorMessage, nozzle::NozzleOperatorMessage, pump::PumpOperatorMessage, naming::NamingOperatorMessage}};
+
+pub const AFV_COMM_PORT: u16 = 4040;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub enum NetMessage{
@@ -14,6 +16,7 @@ pub enum NetMessage{
     NozzleOperator(NozzleOperatorMessage),
     PumpOperator(PumpOperatorMessage),
     PeripheralOperator(PumpOperatorMessage),
+    NamingOperator(NamingOperatorMessage),
 }
 
 pub mod scanner;
