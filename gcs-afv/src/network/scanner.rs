@@ -4,10 +4,13 @@ use default_net::get_interfaces;
 use flume::Sender;
 use ipnet::Ipv4Net;
 use rand::{thread_rng, Rng};
-use tokio::{net::{TcpStream, TcpSocket}, sync::Semaphore, time::{sleep, Duration}};
+use tokio::{
+    net::{TcpSocket, TcpStream},
+    sync::Semaphore,
+    time::{sleep, Duration},
+};
 
-
-pub struct ScanBuilder{
+pub struct ScanBuilder {
     scan_count: ScanCount,
     tgt_ports: Vec<u16>,
     excluded_peers: PeerExclusion,
@@ -15,7 +18,7 @@ pub struct ScanBuilder{
     wait_time: Duration,
 }
 
-impl ScanBuilder{
+impl ScanBuilder {
     pub fn scan_count(mut self, scan_count: ScanCount) -> ScanBuilder {
         self.scan_count = scan_count;
         self
@@ -34,61 +37,73 @@ impl ScanBuilder{
     }
     /// Must be called within an async runtime
     pub fn dispatch(self) -> flume::Receiver<TcpStream> {
-        let (tx,rx) = flume::unbounded();
+        let (tx, rx) = flume::unbounded();
         tokio::spawn(self.scan(tx));
         rx
     }
-    async fn scan(self, tx: Sender<TcpStream>){
+    async fn scan(self, tx: Sender<TcpStream>) {
         // First we pull the interfaces
         let interfaces = get_interfaces();
-      
+
         // Just used for debugging
         let scan_id = thread_rng().gen::<u16>();
         println!("Scan {} started", scan_id);
 
         // Now we need to set our scan budget
-        let mut scan_budget = match self.scan_count{
+        let mut scan_budget = match self.scan_count {
             ScanCount::Infinite => 1,
             ScanCount::Limited(l) => l,
         };
 
         // Prepare our peer exclusion list
-        let excluded_peers = match self.excluded_peers{
+        let excluded_peers = match self.excluded_peers {
             PeerExclusion::Never => None,
             PeerExclusion::PreExcluded(p) => {
                 let mut set = HashSet::new();
-                for p in p{
+                for p in p {
                     set.insert(p);
                 }
                 Some(set)
-            },
+            }
             PeerExclusion::ConnectOnce => Some(HashSet::new()),
         };
 
         // Now we enter the main while loop
-        while scan_budget >= 1{
+        while scan_budget >= 1 {
             // We need to consume a scan
-            match self.scan_count{
+            match self.scan_count {
                 ScanCount::Infinite => {
                     println!("Scan {} restarting", scan_id);
-                },
+                }
                 ScanCount::Limited(_) => {
                     println!("Scan {}, {} remaining scans", scan_id, scan_budget);
                     scan_budget -= 1;
-                },
+                }
             };
 
             // We will need the address of each interface to attempt a socket bind
             let mut interface_nets = vec![];
-            for interface in interfaces.iter(){
-                if let Some(ip) = interface.ipv4.first(){
-                    if let Ok(net) = Ipv4Net::with_netmask(ip.addr, ip.netmask){
+            for interface in interfaces.iter() {
+                if let Some(ip) = interface.ipv4.first() {
+                    if let Ok(net) = Ipv4Net::with_netmask(ip.addr, ip.netmask) {
                         // We can skip loopback since we wont be using it
-                        if net.addr().is_loopback(){continue;}
+                        if net.addr().is_loopback() {
+                            continue;
+                        }
                         // We debug its name
-                        match &interface.friendly_name{
-                            Some(n) => println!("Scan {} using interface {} with address {}", scan_id, *n, net.addr()),
-                            None => println!("Scan {} using interface {} with address {}", scan_id, interface.name, net.addr()),
+                        match &interface.friendly_name {
+                            Some(n) => println!(
+                                "Scan {} using interface {} with address {}",
+                                scan_id,
+                                *n,
+                                net.addr()
+                            ),
+                            None => println!(
+                                "Scan {} using interface {} with address {}",
+                                scan_id,
+                                interface.name,
+                                net.addr()
+                            ),
                         }
                         interface_nets.push(net);
                     }
@@ -103,16 +118,18 @@ impl ScanBuilder{
             let mut task_count = 0;
 
             // Now we begin the net search
-            for net in interface_nets{
-                for host in net.hosts(){
-                    for &port in self.tgt_ports.iter(){
+            for net in interface_nets {
+                for host in net.hosts() {
+                    for &port in self.tgt_ports.iter() {
                         let tgt = SocketAddr::from((host, port));
                         // First we need to see if this ip:port is already excluded
-                        match &excluded_peers{
+                        match &excluded_peers {
                             Some(p) => {
-                                if let Some(_) = p.get(&tgt){continue;}
-                            },
-                            None => {},
+                                if let Some(_) = p.get(&tgt) {
+                                    continue;
+                                }
+                            }
+                            None => {}
                         }
 
                         // We will now dispatch a connection task for this target
@@ -120,35 +137,34 @@ impl ScanBuilder{
                         let socket_tx = socket_tx.clone();
                         let semaphore = semaphore.clone();
                         task_count += 1;
-                        
+
                         tokio::spawn(async move {
                             let _signal = socket_tx;
-                            let _permit = match semaphore.acquire().await{
+                            let _permit = match semaphore.acquire().await {
                                 Ok(p) => p,
                                 Err(_) => return,
                             };
-                            if tx.is_disconnected(){
+                            if tx.is_disconnected() {
                                 return;
                             }
-                            let socket = match TcpSocket::new_v4(){
+                            let socket = match TcpSocket::new_v4() {
                                 Ok(s) => s,
                                 Err(_) => return,
                             };
-                            if let Err(_) = socket.bind((net.addr(), 0u16).into()){
+                            if let Err(_) = socket.bind((net.addr(), 0u16).into()) {
                                 return;
                             }
-                            if let Ok(s) = socket.connect(tgt).await{
-                                if let Ok(addr) = s.peer_addr(){
+                            if let Ok(s) = socket.connect(tgt).await {
+                                if let Ok(addr) = s.peer_addr() {
                                     println!("Scanner found peer at {}", addr)
                                 }
                                 let _ = tx.send_async(s).await;
                             }
-
                         });
                     }
                 }
             }
-            
+
             println!("Scan {} started {} connect tasks", scan_id, task_count);
 
             drop(socket_tx);
@@ -159,18 +175,17 @@ impl ScanBuilder{
             // We are now finished with a scan round
             // we will wait for the specified wait time
             println!("Scan {} round completed", scan_id);
-            if tx.is_disconnected(){
+            if tx.is_disconnected() {
                 return;
             }
             sleep(self.wait_time).await;
-            
         }
     }
 }
 
-impl Default for ScanBuilder{
+impl Default for ScanBuilder {
     fn default() -> Self {
-        Self{
+        Self {
             scan_count: Default::default(),
             excluded_peers: Default::default(),
             tgt_ports: Default::default(),
@@ -180,22 +195,22 @@ impl Default for ScanBuilder{
     }
 }
 
-pub enum ScanCount{
+pub enum ScanCount {
     Infinite,
     Limited(u32),
 }
-impl Default for ScanCount{
+impl Default for ScanCount {
     fn default() -> Self {
         ScanCount::Limited(1)
     }
 }
 
-pub enum PeerExclusion{
+pub enum PeerExclusion {
     Never,
     PreExcluded(Vec<SocketAddr>),
     ConnectOnce,
-} 
-impl Default for PeerExclusion{
+}
+impl Default for PeerExclusion {
     fn default() -> Self {
         Self::ConnectOnce
     }
