@@ -84,10 +84,10 @@ impl ScanBuilder {
             // We need to consume a scan
             match self.scan_count {
                 ScanCount::Infinite => {
-                    info!("Scan {} running", scan_id);
+                    info!("Scan {:x} running", scan_id);
                 }
                 ScanCount::Limited(_) => {
-                    info!("Scan {}, {} remaining scans", scan_id, scan_budget);
+                    info!("Scan {:x}, {} remaining scans", scan_id, scan_budget);
                     scan_budget -= 1;
                 }
             };
@@ -104,13 +104,13 @@ impl ScanBuilder {
                         // We debug its name
                         match &interface.friendly_name {
                             Some(n) => debug!(
-                                "Scan {} using interface {} with address {}",
+                                "Scan {:x} using interface {} with address {}",
                                 scan_id,
                                 *n,
                                 net.addr()
                             ),
                             None => debug!(
-                                "Scan {} using interface {} with address {}",
+                                "Scan {:x} using interface {} with address {}",
                                 scan_id,
                                 interface.name,
                                 net.addr()
@@ -167,7 +167,7 @@ impl ScanBuilder {
                             }
                             if let Ok(s) = socket.connect(tgt).await {
                                 if let Ok(addr) = s.peer_addr() {
-                                    info!("Scanner found peer at {}", addr)
+                                    info!("Scan {:x} found peer at {}", scan_id, addr)
                                 }
                                 let _ = tx.send_async(s).await;
                             }
@@ -176,7 +176,7 @@ impl ScanBuilder {
                 }
             }
 
-            debug!("Scan {} started {} connect tasks", scan_id, task_count);
+            debug!("Scan {:x} started {} connect tasks", scan_id, task_count);
 
             drop(socket_tx);
             // This will complete with an error when the last _signal is dropped in
@@ -185,7 +185,7 @@ impl ScanBuilder {
 
             // We are now finished with a scan round
             // we will wait for the specified wait time
-            info!("Scan {} round completed", scan_id);
+            info!("Scan {:x} round completed", scan_id);
             if tx.is_disconnected() {
                 return;
             }

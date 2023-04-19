@@ -1,5 +1,3 @@
 pub mod afv;
-
-pub mod drivers;
-
-pub mod operators;
+pub mod naming;
+pub mod flir;

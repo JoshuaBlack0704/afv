@@ -5,18 +5,18 @@ use tokio::sync::{broadcast, Mutex};
 
 use crate::{network::{socket::Socket, afv_bridge::AfvBridge, NetMessage, scanner::ScanCount}, ui::Renderable};
 
-use super::operators::namingoperator::NamingOperatorCommunicator;
-
+use super::{naming::NamingSystemCommunicator, flir::FlirSystemCommunicator};
 
 #[derive(Clone)]
 pub struct AfvCommuncation{
     _tx: broadcast::Sender<NetMessage>,
-    naming_operator: NamingOperatorCommunicator,
+    naming_system: NamingSystemCommunicator,
+    flir_system: FlirSystemCommunicator,
 }
 
 impl AfvCommuncation{
     pub async fn uuid(&self) -> u64 {
-        self.naming_operator.uuid().await
+        self.naming_system.uuid().await
     }
     pub async fn find_afvs(afvs: Arc<Mutex<Vec<AfvCommuncation>>>, scan_count: ScanCount){
         let discovered_afvs = AfvBridge::scan(scan_count);
@@ -32,13 +32,14 @@ impl AfvCommuncation{
 
         Self{
             _tx: tx.clone(),
-            naming_operator: NamingOperatorCommunicator::new(tx.clone()).await,
+            naming_system: NamingSystemCommunicator::new(tx.clone()).await,
+            flir_system: FlirSystemCommunicator::new(tx.clone()).await,
         }
     }
 }
 
 impl Renderable for AfvCommuncation{
-    fn render(&self, ui: &mut Ui) {
-        ui.label("jshgj");
+    fn render(&mut self, ui: &mut Ui) {
+        self.flir_system.render(ui);
     }
 }

@@ -6,12 +6,12 @@ use tokio::sync::{Mutex, broadcast};
 use crate::network::NetMessage;
 
 #[derive(Clone)]
-pub struct NamingOperatorCommunicator{
+pub struct NamingSystemCommunicator{
     tx: broadcast::Sender<NetMessage>,
     uuid: Arc<Mutex<u64>>,
 }
 
-impl NamingOperatorCommunicator{
+impl NamingSystemCommunicator{
     pub async fn new(tx: broadcast::Sender<NetMessage>) -> Self{
         let comm = Self{
             tx,
@@ -24,7 +24,7 @@ impl NamingOperatorCommunicator{
 
     }
     async fn start(self){
-        info!("Naming operator comunicator started");
+        info!("Naming communicator system started");
         let mut rx = self.tx.subscribe();
 
         loop{

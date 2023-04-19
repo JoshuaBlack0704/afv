@@ -14,7 +14,7 @@ pub struct NamingOperator{
 }
 
 impl NamingOperator{
-    pub async fn new(tx: broadcast::Sender<NetMessage>, _rx: broadcast::Receiver<NetMessage>){
+    pub async fn new(tx: broadcast::Sender<NetMessage>){
         let uuid = thread_rng().gen();
 
         loop{

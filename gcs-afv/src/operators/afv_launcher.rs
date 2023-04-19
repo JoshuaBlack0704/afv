@@ -4,7 +4,7 @@ use tokio::{sync::broadcast, time::sleep};
 
 use crate::network::{NetMessage, afv_bridge::AfvBridge, scanner::ScanCount};
 
-use super::naming::NamingOperator;
+use super::{naming::NamingOperator, flir::FlirOperator};
 
 pub async fn launch(client: bool, direct_connect: Option<SocketAddr>){
     let (tx, _rx) = broadcast::channel::<NetMessage>(10000);
@@ -22,7 +22,8 @@ pub async fn launch(client: bool, direct_connect: Option<SocketAddr>){
         tokio::spawn(AfvBridge::server(tx.clone(), None));
     }
 
-    tokio::spawn(NamingOperator::new(tx.clone(), tx.subscribe()));
+    tokio::spawn(NamingOperator::new(tx.clone()));
+    tokio::spawn(FlirOperator::new(tx.clone()));
     loop{
         sleep(tokio::time::Duration::from_secs(1)).await;
     }
@@ -31,5 +32,6 @@ pub async fn launch(client: bool, direct_connect: Option<SocketAddr>){
 pub async fn simulate(){
     let (tx, _rx) = broadcast::channel::<NetMessage>(10000);
     tokio::spawn(AfvBridge::server(tx.clone(), None));
-    tokio::spawn(NamingOperator::new(tx.clone(), tx.subscribe()));
+    tokio::spawn(NamingOperator::new(tx.clone()));
+    tokio::spawn(FlirOperator::new(tx.clone()));
 }
