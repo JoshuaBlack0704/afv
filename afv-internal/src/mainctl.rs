@@ -1,4 +1,4 @@
-use arduino_hal::{spi::ChipSelectPin, hal::{port::{PB2, PD2}, usart::Usart0}, Spi, clock::MHz16, port::{Pin, mode::Output}};
+use arduino_hal::{spi::ChipSelectPin, hal::{port::PB2, usart::Usart0}, Spi, clock::MHz16};
 
 use crate::{w5500::socket_register::Socket, network::InternalMessage};
 

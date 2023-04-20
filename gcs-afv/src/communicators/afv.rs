@@ -1,27 +1,27 @@
 use std::sync::Arc;
 
 use eframe::egui::Ui;
-use tokio::sync::{broadcast, Mutex};
+use tokio::{sync::{broadcast, Mutex}, runtime::Handle};
 
 use crate::{network::{socket::Socket, afv_bridge::AfvBridge, NetMessage, scanner::ScanCount}, ui::Renderable};
 
 use super::{naming::NamingSystemCommunicator, flir::FlirSystemCommunicator};
 
-#[derive(Clone)]
 pub struct AfvCommuncation{
-    _tx: broadcast::Sender<NetMessage>,
+    handle: Handle,
+    tx: broadcast::Sender<NetMessage>,
     naming_system: NamingSystemCommunicator,
-    flir_system: FlirSystemCommunicator,
+    flir_system: Option<FlirSystemCommunicator>,
 }
 
 impl AfvCommuncation{
-    pub async fn uuid(&self) -> u64 {
+    pub async fn uuid(&mut self) -> u64 {
         self.naming_system.uuid().await
     }
     pub async fn find_afvs(afvs: Arc<Mutex<Vec<AfvCommuncation>>>, scan_count: ScanCount){
         let discovered_afvs = AfvBridge::scan(scan_count);
         while let Ok(socket) = discovered_afvs.recv_async().await{
-           let communication = Self::start_communication(socket).await; 
+            let communication = Self::start_communication(socket).await; 
             afvs.lock().await.push(communication);
         }
     }
@@ -31,15 +31,17 @@ impl AfvCommuncation{
         
 
         Self{
-            _tx: tx.clone(),
+            tx: tx.clone(),
             naming_system: NamingSystemCommunicator::new(tx.clone()).await,
-            flir_system: FlirSystemCommunicator::new(tx.clone()).await,
+            flir_system: Default::default(),
+            handle: Handle::current(),
         }
     }
 }
 
 impl Renderable for AfvCommuncation{
     fn render(&mut self, ui: &mut Ui) {
-        self.flir_system.render(ui);
+        let flir_system = self.flir_system.get_or_insert_with(||{self.handle.block_on(FlirSystemCommunicator::new(self.tx.clone(), ui))});
+        flir_system.render(ui);
     }
 }

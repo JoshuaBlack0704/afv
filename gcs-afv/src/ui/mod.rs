@@ -56,7 +56,7 @@ impl GcsUi{
             egui::ComboBox::from_label("Connected Afvs")            
             .selected_text(format!("{:x}", self.selected_afv))
             .show_ui(ui, |ui|{
-                    for afv in self.connected_afvs.blocking_lock().iter(){
+                    for afv in self.connected_afvs.blocking_lock().iter_mut(){
                         let uuid = self.runtime.block_on(afv.uuid());
                         ui.selectable_value(&mut self.selected_afv, uuid, format!("{:x}", uuid));
                     }

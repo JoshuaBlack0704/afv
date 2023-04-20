@@ -15,7 +15,7 @@ impl NamingSystemCommunicator{
     pub async fn new(tx: broadcast::Sender<NetMessage>) -> Self{
         let comm = Self{
             tx,
-            uuid: Arc::new(Mutex::new(0)),
+            uuid: Arc::new(Mutex::new(u64::MAX)),
         };
 
         tokio::spawn(comm.clone().start());
