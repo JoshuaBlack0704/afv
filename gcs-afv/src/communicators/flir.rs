@@ -1,12 +1,16 @@
 use std::sync::Arc;
 
 use eframe::{
-    egui::{TextureHandle, Ui, DragValue},
-    epaint::ColorImage,
+    egui::{
+        self,
+        plot::{Arrows, PlotImage, PlotPoint, Points},
+        DragValue, TextureHandle, Ui,
+    },
+    epaint::{Color32, ColorImage},
 };
-use image::{DynamicImage, ImageBuffer};
+use image::DynamicImage;
 use log::{debug, error};
-use openh264::{decoder::Decoder, nal_units, to_bitstream_with_001_be};
+use openh264::decoder::Decoder;
 
 use tokio::{
     sync::{broadcast, watch, Notify},
@@ -14,27 +18,36 @@ use tokio::{
 };
 
 use crate::{
-    drivers::flir::FlirDriverMessage, network::NetMessage, operators::flir::{FlirOperatorSettings, FlirOperatorMessage, FlirAnalysis},
+    drivers::flir::FlirDriverMessage,
+    network::NetMessage,
+    operators::flir::{FlirAnalysis, FlirOperator, FlirOperatorMessage, FlirOperatorSettings},
     ui::Renderable,
 };
 
 #[derive(Clone)]
 pub struct FlirSystemCommunicator {
     net_tx: broadcast::Sender<NetMessage>,
+
     settings_watch: Arc<watch::Sender<FlirOperatorSettings>>,
+    settings_reciever: watch::Receiver<FlirOperatorSettings>,
+
     image_watch: Arc<watch::Sender<DynamicImage>>,
+
     image_analysis_watch: Arc<watch::Sender<FlirAnalysis>>,
+    image_analysis_receiver: watch::Receiver<FlirAnalysis>,
+
     gui_image_watch: Arc<watch::Sender<ColorImage>>,
+    gui_image_receiver: watch::Receiver<ColorImage>,
+
     stream_ir_request: Arc<Notify>,
     stream_visual_request: Arc<Notify>,
+    auto_target_request_notify: Arc<Notify>,
 
     //Ui parameters
     adjustable_settings: FlirOperatorSettings,
     stream_ir: bool,
     stream_visual: bool,
-    gui_image_receiver: watch::Receiver<ColorImage>,
-    settings_reciever: watch::Receiver<FlirOperatorSettings>,
-    image_analysis_receiver: watch::Receiver<FlirAnalysis>,
+    auto_target: bool,
     gui_texture: TextureHandle,
 }
 
@@ -63,13 +76,16 @@ impl FlirSystemCommunicator {
             settings_reciever: settings_watch.1,
             image_analysis_watch: Arc::new(image_analysis_watch.0),
             image_analysis_receiver: image_analysis_watch.1,
+            auto_target_request_notify: Default::default(),
+            auto_target: Default::default(),
         };
 
         tokio::spawn(comm.clone().nal_intake_task());
         tokio::spawn(comm.clone().stream_ir_request_task());
         tokio::spawn(comm.clone().stream_visual_request_task());
         tokio::spawn(comm.clone().settings_update_task());
-        tokio::spawn(comm.clone().analyze_image_task());
+        tokio::spawn(comm.clone().auto_target_request_task());
+        tokio::spawn(comm.clone().analysis_intake_task());
 
         debug!("Starting new flir communication system");
 
@@ -87,44 +103,37 @@ impl FlirSystemCommunicator {
 
         loop {
             let nal = match nal_rx.recv().await {
-                Ok(NetMessage::FlirDriver(FlirDriverMessage::NalPacket(nal))) => {
-                    let mut units = nal.clone();
-                    to_bitstream_with_001_be::<u32>(&nal, &mut units);
-                    units
-                }
+                Ok(NetMessage::FlirDriver(FlirDriverMessage::NalPacket(nal))) => nal,
                 _ => {
                     continue;
                 }
             };
 
-            for packet in nal_units(&nal) {
-                if let Ok(Some(yuv)) = decoder.decode(&packet) {
-                    let image_size = yuv.dimension_rgb();
-                    let mut rgb_data = vec![0; image_size.0 * image_size.1 * 3];
-                    yuv.write_rgb8(&mut rgb_data);
-                    let image_data = match ImageBuffer::from_raw(
-                        image_size.0 as u32,
-                        image_size.1 as u32,
-                        rgb_data,
-                    ) {
-                        Some(i) => i,
-                        None => continue,
-                    };
+            let image = match FlirOperator::process_nal_data(nal, &mut decoder) {
+                Some(i) => i,
+                None => continue,
+            };
 
-                    debug!("New image recieved from AFV");
+            let _ = self.image_watch.send(image.clone());
 
-                    let new_image = DynamicImage::ImageRgb8(image_data);
-                    let _ = self.image_watch.send(new_image.clone());
+            let pixels = match image.as_rgb8() {
+                Some(i) => i,
+                None => continue,
+            }
+            .as_flat_samples();
+            let size = [image.width() as usize, image.height() as usize];
+            let color_image = ColorImage::from_rgb(size, pixels.as_slice());
+            let _ = self.gui_image_watch.send(color_image);
+        }
+    }
+    async fn analysis_intake_task(self) {
+        let mut net_rx = self.net_tx.subscribe();
 
-                    let pixels = match new_image.as_rgb8() {
-                        Some(i) => i,
-                        None => continue,
-                    }
-                    .as_flat_samples();
-                    let size = [image_size.0, image_size.1];
-                    let color_image = ColorImage::from_rgb(size, pixels.as_slice());
-                    let _ = self.gui_image_watch.send(color_image);
-                }
+        loop {
+            if let Ok(NetMessage::FlirOperator(FlirOperatorMessage::Analysis(analysis))) =
+                net_rx.recv().await
+            {
+                let _ = self.image_analysis_watch.send(analysis);
             }
         }
     }
@@ -146,17 +155,90 @@ impl FlirSystemCommunicator {
                 .send(NetMessage::FlirDriver(FlirDriverMessage::OpenVisualStream));
         }
     }
+    async fn auto_target_request_task(self) {
+        loop {
+            self.auto_target_request_notify.notified().await;
+            sleep(Duration::from_secs(1)).await;
+            let _ = self
+                .net_tx
+                .send(NetMessage::FlirOperator(FlirOperatorMessage::AutoTarget));
+        }
+    }
     async fn settings_update_task(self) {
         let mut net_rx = self.net_tx.subscribe();
 
-        loop{
-            if let Ok(NetMessage::FlirOperator(FlirOperatorMessage::Settings(settings))) = net_rx.recv().await{
+        loop {
+            if let Ok(NetMessage::FlirOperator(FlirOperatorMessage::Settings(settings))) =
+                net_rx.recv().await
+            {
                 let _ = self.settings_watch.send(settings);
             }
         }
     }
-    async fn analyze_image_task(self){
-        
+    fn plot_image(&mut self, ui: &mut Ui) {
+        if let Ok(true) = self.gui_image_receiver.has_changed() {
+            self.gui_texture = ui.ctx().load_texture(
+                "Flir IR ui image",
+                self.gui_image_receiver.borrow_and_update().to_owned(),
+                Default::default(),
+            );
+        }
+        let texture = self.gui_texture.clone();
+        let gui_image_size = texture.size_vec2();
+        let analysis = self.image_analysis_receiver.borrow_and_update().clone();
+
+        let lower_centroid = [
+            analysis.lower_centroid[0] as f64,
+            -analysis.lower_centroid[1] as f64,
+        ];
+        let upper_centroid = [
+            analysis.upper_centroid[0] as f64,
+            -analysis.upper_centroid[1] as f64,
+        ];
+        let points = Points::new(vec![lower_centroid, upper_centroid])
+            .shape(egui::plot::MarkerShape::Circle)
+            .filled(true)
+            .radius(5.0)
+            .name("Centroids");
+        let centroidal_arrow = Arrows::new(vec![upper_centroid], vec![lower_centroid])
+            .color(Color32::RED)
+            .name("Fire Axis");
+
+        let delta_angles = analysis.angle_change;
+        let center = [
+            gui_image_size.x as f64 / 2.0,
+            -gui_image_size.y as f64 / 2.0,
+        ];
+        let rot_x = [
+            (gui_image_size.x + 5.0 * delta_angles[0]) as f64 / 2.0,
+            -gui_image_size.y as f64 / 2.0,
+        ];
+        let rot_y = [
+            gui_image_size.x as f64 / 2.0,
+            (-gui_image_size.y + 5.0 * delta_angles[1]) as f64 / 2.0,
+        ];
+        let rotation_arrow = Arrows::new(vec![center, center], vec![rot_x, rot_y])
+            .color(Color32::GOLD)
+            .name("Rotation Arrow");
+
+        egui::widgets::plot::Plot::new("Flir plot")
+            .show_background(false)
+            .data_aspect(1.0)
+            .include_x(gui_image_size.x)
+            .include_y(-gui_image_size.y)
+            .label_formatter(|_name, value| format!("    {:.0}, {:.0}", value.x, value.y.abs()))
+            .y_axis_formatter(|y, _range| y.abs().to_string())
+            .show(ui, |ui| {
+                let image = PlotImage::new(
+                    texture.id(),
+                    PlotPoint::new(gui_image_size.x / 2.0, -gui_image_size.y / 2.0),
+                    gui_image_size,
+                );
+                ui.image(image);
+                ui.points(points);
+                ui.arrows(centroidal_arrow);
+                ui.arrows(rotation_arrow);
+            });
     }
 }
 
@@ -182,25 +264,33 @@ impl Renderable for FlirSystemCommunicator {
                 self.stream_visual = false;
             }
         }
-        if ui.button("Poll settings").clicked(){
+        if ui.button("Poll settings").clicked() {
             self.adjustable_settings = self.settings_reciever.borrow_and_update().clone();
         }
+        if self.auto_target {
+            self.auto_target_request_notify.notify_one();
+            if ui.button("Stop auto target").clicked() {
+                self.auto_target = false;
+            }
+        } else {
+            if ui.button("Start auto target").clicked() {
+                self.auto_target = true;
+            }
+        }
 
-        let drag = DragValue::new(&mut self.adjustable_settings.fliter_value).clamp_range(0..=255).speed(1.0);
+        let drag = DragValue::new(&mut self.adjustable_settings.fliter_value)
+            .clamp_range(0..=255)
+            .speed(1.0);
         ui.add(drag);
 
-        if ui.button("Send settings").clicked(){
-            let _ = self.net_tx.send(NetMessage::FlirOperator(FlirOperatorMessage::SetSettings(self.adjustable_settings.clone())));
+        if ui.button("Send settings").clicked() {
+            let _ = self
+                .net_tx
+                .send(NetMessage::FlirOperator(FlirOperatorMessage::SetSettings(
+                    self.adjustable_settings.clone(),
+                )));
         }
 
-        if let Ok(true) = self.gui_image_receiver.has_changed() {
-            self.gui_texture = ui.ctx().load_texture(
-                "Flir IR ui image",
-                self.gui_image_receiver.borrow_and_update().to_owned(),
-                Default::default(),
-            );
-        }
-
-        ui.image(self.gui_texture.id(), ui.available_size());
+        self.plot_image(ui)
     }
 }

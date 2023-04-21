@@ -4,7 +4,7 @@ use crate::{drivers::{flir::FlirDriverMessage, turret::TurretDriverMessage, lida
 
 pub const AFV_COMM_PORT: u16 = 4040;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum NetMessage{
     FlirDriver(FlirDriverMessage),
     TurretDriver(TurretDriverMessage),

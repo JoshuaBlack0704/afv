@@ -16,7 +16,7 @@ use crate::network::{
     NetMessage,
 };
 
-pub const STREAM_REQUEST_INTERVAL: u64 = 3;
+pub const STREAM_REQUEST_INTERVAL: u64 = 1;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum FlirDriverMessage {
@@ -50,6 +50,9 @@ impl FlirDriver {
         tokio::spawn(driver.clone().network_visual_stream());
 
         driver
+    }
+    pub fn ir_stream_rx(&self) -> broadcast::Receiver<Vec<u8>> {
+        self.ir_nal_stream.subscribe()
     }
 
     async fn ir_stream_task(self) {
@@ -202,7 +205,7 @@ impl FlirDriver {
     }
     async fn network_ir_stream_task(self) {
         let mut net_rx = self.net_tx.subscribe();
-        let mut stream_rx = self.ir_nal_stream.subscribe();
+        let mut nal_rx = self.ir_nal_stream.subscribe();
         let mut last_poll = Instant::now();
         sleep(Duration::from_secs(STREAM_REQUEST_INTERVAL + 1)).await;
 
@@ -215,7 +218,7 @@ impl FlirDriver {
                 {
                     last_poll = Instant::now()
                 }
-                if let Ok(nal) = stream_rx.recv().await {
+                if let Ok(nal) = nal_rx.recv().await {
                     let _ = self
                         .net_tx
                         .send(NetMessage::FlirDriver(FlirDriverMessage::NalPacket(nal)));
@@ -226,7 +229,7 @@ impl FlirDriver {
                 debug!("Flir driver starting network ir stream");
                 last_poll = Instant::now();
             }
-            stream_rx.resubscribe();
+            nal_rx.resubscribe();
         }
     }
     async fn network_visual_stream(self) {
