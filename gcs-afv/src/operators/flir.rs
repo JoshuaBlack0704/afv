@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use afv_internal::FLIRTURRETPORT;
+use afv_internal::FLIR_TURRET_PORT;
 use glam::Vec2;
 use image::{DynamicImage, ImageBuffer};
 use log::{error, info, trace};
@@ -90,7 +90,7 @@ impl FlirOperator {
             match net_rx.recv().await{
                 Ok(NetMessage::FlirOperator(FlirOperatorMessage::Analysis(analysis))) => {
                     info!("Commanding flir turret to {:?}", analysis.angle_change);
-                    let _ = self.net_tx.send(NetMessage::TurretDriver(TurretDriverMessage::SetAngle(FLIRTURRETPORT, analysis.angle_change)));
+                    let _ = self.net_tx.send(NetMessage::TurretDriver(TurretDriverMessage::SetAngle(FLIR_TURRET_PORT, analysis.angle_change)));
                     sleep(Duration::from_millis(500)).await;
                     net_rx.resubscribe();
                 }

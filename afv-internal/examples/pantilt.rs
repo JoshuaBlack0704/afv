@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 
-use afv_internal::{stepper::StepperMotor, pantilt::PanTilt, w5500::{socket_register::{self, SocketBlock}, W5500}, FLIRTURRETPORT};
+use afv_internal::{stepper::StepperMotor, turret::Turret, w5500::{socket_register::{self, SocketBlock}, W5500}, FLIR_TURRET_PORT};
 use arduino_hal::Spi;
 use embedded_hal::spi::{Polarity, Phase};
 use panic_halt as _;
@@ -50,13 +50,13 @@ fn main() -> ! {
     let _ = ufmt::uwriteln!(&mut serial, "W5500 Link Status {}", common_block.read_phy_cfg(&mut spi, &mut cs).link_status());
 
     let mode = socket_register::Mode::default().set_protocol_tcp();
-    let mut socket0 = W5500::socket_n(SocketBlock::SOCKET0, mode, FLIRTURRETPORT, &mut spi, &mut cs);
+    let mut socket0 = W5500::socket_n(SocketBlock::SOCKET0, mode, FLIR_TURRET_PORT, &mut spi, &mut cs);
     // let mut mainctl = MainCtl::new(socket0);
     
     let pan = StepperMotor::new(pins.d5.into_output(), pins.d4.into_output(), None, None, 200, Some(16), 1000, false);
     let tilt = StepperMotor::new(pins.d3.into_output(), pins.d2.into_output(), None, None, 200, Some(16), 1000, true);
 
-    let mut turret = PanTilt::new(pan, tilt);
+    let mut turret = Turret::new(pan, tilt);
 
     let _ = turret.home(&mut serial, 200);
     

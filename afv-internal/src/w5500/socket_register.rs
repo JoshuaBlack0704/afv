@@ -1,4 +1,4 @@
-use arduino_hal::{spi::ChipSelectPin, Spi, hal::port::PB2};
+use arduino_hal::{spi::ChipSelectPin, Spi, hal::{port::PB2, usart::Usart0}, clock::MHz16};
 use ufmt::derive::uDebug;
 
 use crate::{network::InternalMessage, SOCKET_MSG_SIZE};
@@ -148,6 +148,7 @@ impl From<u8> for SocketStatus{
     }
 }
 
+#[derive(Debug, uDebug)]
 pub struct Mode{
     reg: u8,
 }
@@ -287,29 +288,31 @@ impl W5500{
 }
 
 impl Socket{
-    pub fn init(&self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>){
+    pub fn init(&self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>, serial: &mut Usart0<MHz16>){
         self.write_cmd(Command::OPEN, spi, cs);
+        let _ = ufmt::uwriteln!(serial, "Socket port {} mode {:?}", self.read_src_port(spi,cs), self.read_mode(spi, cs));
         loop{
             if let SocketStatus::Init = self.read_status(spi, cs){
+                let _ = ufmt::uwriteln!(serial, "Socket port {} initialized", self.read_src_port(spi,cs));
                 break;
             }
         }
     }
-    pub fn server_connected(&mut self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> bool{
-        if let SocketStatus::Closed = self.read_status(spi, cs){
-            self.init(spi, cs);
-            self.write_cmd(Command::LISTEN, spi, cs);
-        }
-        if let SocketStatus::Established = self.read_status(spi, cs){
-            return true;
-        }
-        else{
-            return false;
+    pub fn server_connected(&mut self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>, serial: &mut Usart0<MHz16>) -> bool{
+        match self.read_status(spi, cs){
+            SocketStatus::Closed => {
+                let _ = ufmt::uwriteln!(serial, "Socket port {} closed. Initalizing", self.read_src_port(spi,cs));
+                self.init(spi, cs, serial);
+                self.write_cmd(Command::LISTEN, spi, cs);
+                return false;
+            },
+            SocketStatus::Established => return true,
+            _ => return false
         }
     }
-    pub fn block_listen(&mut self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>){
+    pub fn block_listen(&mut self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>, serial: &mut Usart0<MHz16>){
         if let SocketStatus::Closed = self.read_status(spi, cs){
-            self.init(spi, cs);
+            self.init(spi, cs, serial);
         }
         
         self.write_cmd(Command::LISTEN, spi, cs);

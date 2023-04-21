@@ -31,6 +31,16 @@ pub struct StepperMotor<StepPin: OutputPin, DirPin: OutputPin>{
     step_time_us: u32,
     inverted: bool,
 }
+pub fn convert_steps_angle(step: i32, steps_rev: u32) -> f32{
+    let angle_steps = steps_rev as f32 / 360.0;
+    let angle = angle_steps * step as f32;
+    angle
+}
+pub fn convert_angle_steps(angle: f32, steps_rev: u32) -> i32{
+    let steps_angle = 360.0 / steps_rev as f32;
+    let steps = angle * steps_angle;
+    steps as i32
+}
 
 impl<S: OutputPin, D: OutputPin> StepperMotor<S,D>{
     pub fn new(step_pin: S, dir_pin: D, max_clockwise_step: Option<u32>, max_counter_clockwise_step: Option<u32>, steps_rev: u32, microsteps: Option<u32>, step_time_us: u32, inverted: bool) -> Self{

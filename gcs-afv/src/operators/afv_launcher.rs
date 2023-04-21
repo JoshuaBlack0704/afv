@@ -1,8 +1,9 @@
 use std::net::SocketAddr;
 
+use afv_internal::{FLIR_TURRET_PORT, NOZZLE_TURRET_PORT};
 use tokio::{sync::broadcast, time::sleep};
 
-use crate::network::{NetMessage, afv_bridge::AfvBridge, scanner::ScanCount};
+use crate::{network::{NetMessage, afv_bridge::AfvBridge, scanner::ScanCount}, drivers::turret::TurretDriver};
 
 use super::{naming::NamingOperator, flir::FlirOperator};
 
@@ -24,6 +25,8 @@ pub async fn launch(client: bool, direct_connect: Option<SocketAddr>){
 
     tokio::spawn(NamingOperator::new(tx.clone()));
     tokio::spawn(FlirOperator::new(tx.clone()));
+    tokio::spawn(TurretDriver::new(tx.clone(), FLIR_TURRET_PORT));
+    tokio::spawn(TurretDriver::new(tx.clone(), NOZZLE_TURRET_PORT));
     loop{
         sleep(tokio::time::Duration::from_secs(1)).await;
     }
@@ -34,4 +37,6 @@ pub async fn simulate(){
     tokio::spawn(AfvBridge::server(tx.clone(), None));
     tokio::spawn(NamingOperator::new(tx.clone()));
     tokio::spawn(FlirOperator::new(tx.clone()));
+    tokio::spawn(TurretDriver::new(tx.clone(), FLIR_TURRET_PORT));
+    tokio::spawn(TurretDriver::new(tx.clone(), NOZZLE_TURRET_PORT));
 }

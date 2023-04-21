@@ -3,7 +3,7 @@
 #![feature(abi_avr_interrupt)]
 
 use afv_internal::{w5500::{W5500, socket_register::{self, SocketBlock}}, mainctl::MainCtl};
-use afv_internal::FLIRTURRETPORT;
+use afv_internal::FLIR_TURRET_PORT;
 use arduino_hal::Spi;
 use embedded_hal::spi::{Polarity, Phase};
 use panic_halt as _;
@@ -32,7 +32,7 @@ fn main() -> ! {
     let (mut spi, mut cs) = Spi::new(peripherals.SPI, sck, mosi, miso, cs, settings);
 
     arduino_hal::delay_ms(100);
-    let (version, _) = W5500::new(Default::default(), GATEWAY, SUBNET, MAC, IP, &mut spi, &mut cs);
+    let (version, _) = W5500::new(Default::default(), GATEWAY, SUBNET, MAC, IP, &mut spi, &mut cs, &mut serial);
     let common_block = W5500::common_register();
 
     let _ = ufmt::uwriteln!(&mut serial, "W5500 Version: {}", version);
@@ -51,7 +51,7 @@ fn main() -> ! {
     let _ = ufmt::uwriteln!(&mut serial, "W5500 Link Status {}", common_block.read_phy_cfg(&mut spi, &mut cs).link_status());
 
     let mode = socket_register::Mode::default().set_protocol_tcp();
-    let socket0 = W5500::socket_n(SocketBlock::SOCKET0, mode, FLIRTURRETPORT, &mut spi, &mut cs);
+    let socket0 = W5500::socket_n(SocketBlock::SOCKET0, mode, FLIR_TURRET_PORT, &mut spi, &mut cs);
     let mut mainctl = MainCtl::new(socket0);
 
     let mut pin5 = pins.d5.into_output();

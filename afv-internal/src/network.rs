@@ -1,12 +1,13 @@
 use serde::{Serialize, Deserialize};
 use ufmt::derive::uDebug;
 
-use crate::SOCKET_MSG_SIZE;
+use crate::{SOCKET_MSG_SIZE, turret::TurretMsg};
 
 #[derive(uDebug, Serialize, Deserialize, Clone, Copy)]
 pub enum InternalMessage{
     Ping(u8),
-    FlirSignatureOffset([u8;2])
+    FlirSignatureOffset([u8;2]),
+    Turret(TurretMsg),
 }
 
 impl InternalMessage{
