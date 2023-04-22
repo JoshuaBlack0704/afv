@@ -20,7 +20,7 @@ impl MainCtl{
     /// Will update and conduct all internal systems in a non-blocking manner
     pub fn process(&mut self, serial: &mut Usart0<MHz16>, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>) -> bool{
         // let _ = ufmt::uwriteln!(serial, "MAIN CTL: Server Status {:?}", self.socket.read_status(spi, cs));
-        if self.socket.server_connected(spi, cs, serial){
+        if self.socket.server_connected(spi, cs){
             if !self.server_connected{
                 let _ = ufmt::uwriteln!(serial, "MAIN CTL: Server connected");
                 self.server_connected = true;

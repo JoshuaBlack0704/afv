@@ -31,7 +31,7 @@ fn main() -> ! {
     let (mut spi, mut cs) = Spi::new(peripherals.SPI, sck, mosi, miso, cs, settings);
 
     arduino_hal::delay_ms(100);
-    let (version, _) = W5500::new(Default::default(), GATEWAY, SUBNET, MAC, IP, &mut spi, &mut cs);
+    let (version, _) = W5500::new(Default::default(), GATEWAY, SUBNET, MAC, IP, &mut spi, &mut cs, &mut serial);
     let common_block = W5500::common_register();
     
     let _ = ufmt::uwriteln!(&mut serial, "W5500 Version: {}", version);
@@ -56,13 +56,10 @@ fn main() -> ! {
     let pan = StepperMotor::new(pins.d5.into_output(), pins.d4.into_output(), None, None, 200, Some(16), 1000, false);
     let tilt = StepperMotor::new(pins.d3.into_output(), pins.d2.into_output(), None, None, 200, Some(16), 1000, true);
 
-    let mut turret = Turret::new(pan, tilt);
 
-    let _ = turret.home(&mut serial, 200);
-    
+   
     loop{
-        if socket0.server_connected(&mut spi, &mut cs){
-            let _ = turret.home(&mut serial, 200);
+        if socket0.server_connected(&mut spi, &mut cs, &mut serial){
         }
     }
 }

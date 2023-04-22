@@ -1,7 +1,7 @@
-use std::net::SocketAddr;
+use std::net::{SocketAddr, Ipv4Addr};
 
 use afv_internal::{FLIR_TURRET_PORT, NOZZLE_TURRET_PORT};
-use tokio::{sync::broadcast, time::sleep};
+use tokio::{sync::broadcast, time::sleep, net::TcpStream};
 
 use crate::{network::{NetMessage, afv_bridge::AfvBridge, scanner::ScanCount}, drivers::turret::TurretDriver};
 
@@ -26,7 +26,7 @@ pub async fn launch(client: bool, direct_connect: Option<SocketAddr>){
     tokio::spawn(NamingOperator::new(tx.clone()));
     tokio::spawn(FlirOperator::new(tx.clone()));
     tokio::spawn(TurretDriver::new(tx.clone(), FLIR_TURRET_PORT));
-    tokio::spawn(TurretDriver::new(tx.clone(), NOZZLE_TURRET_PORT));
+    // tokio::spawn(TurretDriver::new(tx.clone(), NOZZLE_TURRET_PORT));
     loop{
         sleep(tokio::time::Duration::from_secs(1)).await;
     }
@@ -38,5 +38,5 @@ pub async fn simulate(){
     tokio::spawn(NamingOperator::new(tx.clone()));
     tokio::spawn(FlirOperator::new(tx.clone()));
     tokio::spawn(TurretDriver::new(tx.clone(), FLIR_TURRET_PORT));
-    tokio::spawn(TurretDriver::new(tx.clone(), NOZZLE_TURRET_PORT));
+    // tokio::spawn(TurretDriver::new(tx.clone(), NOZZLE_TURRET_PORT));
 }

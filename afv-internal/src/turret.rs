@@ -8,7 +8,7 @@ use crate::{stepper::{StepperOps, StepperOpsError}, w5500::{socket_register::{So
 pub enum TurretMsg{
     PollSteps,
     SetSteps(i32, i32),
-    Steps(i32, i32),
+    Steps((i32, i32)),
 }
 
 /// Zero is at direct forward
@@ -36,11 +36,12 @@ impl<PS:StepperOps, TS: StepperOps> Turret<PS, TS>{
         }
     }
     pub fn process(&mut self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>, serial: &mut Usart0<MHz16>){
-        if self.socket.server_connected(spi, cs, serial){
+        if self.socket.server_connected(spi, cs){
             if !self.socket_connected{
                 let _ = ufmt::uwriteln!(serial, "Turret {} connected", self.port);
                 self.socket_connected = true;
             }
+            // self.socket.send(InternalMessage::Ping(10), spi, cs, serial);
 
             if let Some(msg) = self.socket.receive(spi, cs){
                 match msg{
@@ -51,7 +52,7 @@ impl<PS:StepperOps, TS: StepperOps> Turret<PS, TS>{
                     InternalMessage::Turret(msg) => {
                         match msg{
                             TurretMsg::PollSteps => self.poll_steps(spi, cs, serial),
-                            TurretMsg::SetSteps(_, _) => todo!(),
+                            TurretMsg::SetSteps(_, _) => {},
                             _ => {}
                         }
                         
@@ -68,13 +69,13 @@ impl<PS:StepperOps, TS: StepperOps> Turret<PS, TS>{
         }
     }
     fn poll_steps(&mut self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>, serial: &mut Usart0<MHz16>){
-        let _ = ufmt::uwriteln!(serial, "Turret {} steps polled", self.port);
         let pan_steps = self.pan_stepper.current_step();
         let tilt_steps = self.tilt_stepper.current_step();
 
 
-        let msg = InternalMessage::Turret(TurretMsg::Steps(pan_steps, tilt_steps));
+        let msg = InternalMessage::Turret(TurretMsg::Steps((pan_steps, tilt_steps)));
         self.socket.send(msg, spi, cs);
+        let _ = ufmt::uwriteln!(serial, "Turret {} steps polled", self.port);
     }
     /// This algorithim is based off of hard stopping occuring on the turret
     pub fn home(&mut self, serial: &mut Usart0<MHz16>, home_steps: i32) -> Result<(), StepperOpsError>{
