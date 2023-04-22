@@ -56,7 +56,9 @@ impl ScanBuilder {
             }
             interfaces.push(new_i);
         }
-
+        // // First we pull the interfaces
+        // let interfaces = get_interfaces();
+      
         // Just used for debugging
         let scan_id = thread_rng().gen::<u16>();
 

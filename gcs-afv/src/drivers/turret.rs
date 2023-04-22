@@ -24,17 +24,17 @@ pub struct TurretDriver{
 
 impl TurretDriver{
     pub async fn new(net_tx: broadcast::Sender<NetMessage>, port: u16) -> Option<Self>{
-        // let turret_socket = match ScanBuilder::default().scan_count(ScanCount::Infinite).add_port(port).dispatch().recv(){
-        //     Ok(stream) => {
-        //         Socket::new(stream, false)
-        //     },
-        //     Err(_) => return None,
-        // };
-
-        let turret_socket = match TcpStream::connect((Ipv4Addr::new(192,168,4,20), FLIR_TURRET_PORT)).await{
-            Ok(s) => Socket::new(s, false),
-            Err(_) => {return None}
+        let turret_socket = match ScanBuilder::default().scan_count(ScanCount::Infinite).add_port(port).dispatch().recv_async().await{
+            Ok(stream) => {
+                Socket::new(stream, false)
+            },
+            Err(_) => return None,
         };
+
+        // let turret_socket = match TcpStream::connect((Ipv4Addr::new(192,168,4,20), FLIR_TURRET_PORT)).await{
+        //     Ok(s) => Socket::new(s, false),
+        //     Err(_) => {return None}
+        // };
 
         info!("Turret {} connected to MCU", port);
 
