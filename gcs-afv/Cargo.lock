@@ -97,7 +97,6 @@ dependencies = [
  "serde",
  "serde-json-core",
  "ufmt",
- "w5500-hl",
 ]
 
 [[package]]
@@ -3121,24 +3120,6 @@ name = "void"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
-
-[[package]]
-name = "w5500-hl"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c50be5e614c481c23b78b6e986e3e9a0c3a316ab11368a9ad42150ffeead9ff6"
-dependencies = [
- "w5500-ll",
-]
-
-[[package]]
-name = "w5500-ll"
-version = "0.10.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14eceb668bb5671747f4ad17c995f3d0ef3709f986f1ffb52314c454f8b10b56"
-dependencies = [
- "embedded-hal",
-]
 
 [[package]]
 name = "walkdir"

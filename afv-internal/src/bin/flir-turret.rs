@@ -2,7 +2,7 @@
 #![no_main]
 #![feature(abi_avr_interrupt)]
 
-use afv_internal::{turret::Turret, stepper::StepperMotor, w5500::{socket_register::SocketBlock, W5500}, FLIR_TURRET_PORT, NOZZLE_TURRET_PORT};
+use afv_internal::{turret::Turret, lidar::Lidar, stepper::StepperMotor, w5500::{socket_register::SocketBlock, W5500}, FLIR_TURRET_PORT, NOZZLE_TURRET_PORT};
 use arduino_hal::Spi;
 use embedded_hal::spi::{Polarity, Phase};
 use panic_halt as _;
@@ -36,10 +36,12 @@ fn main() -> ! {
     let pan = StepperMotor::new(pins.d9.into_output(), pins.d8.into_output(), None, None, 200, Some(16), 1000, false);
     let tilt = StepperMotor::new(pins.d7.into_output(), pins.d6.into_output(), None, None, 200, Some(16), 1000, true);
     let mut nozzle_turret = Turret::new(pan, tilt, NOZZLE_TURRET_PORT, SocketBlock::SOCKET1, &mut spi, &mut cs, &mut serial);
+    let mut lidar = Lidar::new(SocketBlock::SOCKET2, &mut spi, &mut cs, &mut serial);
 
 
     loop{
         flir_turret.process(&mut spi, &mut cs, &mut serial);
         nozzle_turret.process(&mut spi, &mut cs, &mut serial);
+        lidar.process(&mut spi, &mut cs, &mut serial);
     }
 }
