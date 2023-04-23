@@ -31,11 +31,6 @@ impl TurretDriver{
             Err(_) => return None,
         };
 
-        // let turret_socket = match TcpStream::connect((Ipv4Addr::new(192,168,4,20), FLIR_TURRET_PORT)).await{
-        //     Ok(s) => Socket::new(s, false),
-        //     Err(_) => {return None}
-        // };
-
         info!("Turret {} connected to MCU", port);
 
         let turret = Self{
@@ -59,7 +54,7 @@ impl TurretDriver{
                 data[i] = self.turret_socket.read_byte().await;
             }
 
-            match InternalMessage::from_msg(data){
+            match InternalMessage::from_msg(&data){
                 Some(InternalMessage::Turret(afv_internal::turret::TurretMsg::Steps((pan_steps, tilt_steps)))) => {
                     let pan_angle = stepper::convert_steps_angle(pan_steps, PAN_STEPPER_STEPS_REV);
                     let tilt_angle = stepper::convert_steps_angle(tilt_steps, TILT_STEPPER_STEPS_REV);

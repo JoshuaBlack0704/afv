@@ -36,22 +36,23 @@ impl<PS:StepperOps, TS: StepperOps> Turret<PS, TS>{
         }
     }
     pub fn process(&mut self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>, serial: &mut Usart0<MHz16>){
-        if self.socket.server_connected(spi, cs){
+        // let _ = ufmt::uwriteln!(serial, "Turret proccessing");
+        if self.socket.server_connected(spi, cs, serial){
             if !self.socket_connected{
                 let _ = ufmt::uwriteln!(serial, "Turret {} connected", self.port);
                 self.socket_connected = true;
             }
-            // self.socket.send(InternalMessage::Ping(10), spi, cs, serial);
-
-            if let Some(msg) = self.socket.receive(spi, cs){
+            if let Some(msg) = self.socket.receive(spi, cs, serial){
                 match msg{
-                    InternalMessage::Ping(p) => {
-                        let _ = ufmt::uwriteln!(serial, "Turret {} pinged with {}", self.port, p);
+                    InternalMessage::Ping(_) => {
                         self.socket.send(msg, spi, cs);
                     },
                     InternalMessage::Turret(msg) => {
                         match msg{
-                            TurretMsg::PollSteps => self.poll_steps(spi, cs, serial),
+                            TurretMsg::PollSteps => {
+                                let _ = ufmt::uwriteln!(serial, "Turret {} steps polled", self.port);
+                                self.poll_steps(spi, cs, serial)
+                            },
                             TurretMsg::SetSteps(_, _) => {},
                             _ => {}
                         }
@@ -73,9 +74,10 @@ impl<PS:StepperOps, TS: StepperOps> Turret<PS, TS>{
         let tilt_steps = self.tilt_stepper.current_step();
 
 
+        let _ = ufmt::uwriteln!(serial, "Turret {} calculated steps", self.port);
         let msg = InternalMessage::Turret(TurretMsg::Steps((pan_steps, tilt_steps)));
         self.socket.send(msg, spi, cs);
-        let _ = ufmt::uwriteln!(serial, "Turret {} steps polled", self.port);
+        let _ = ufmt::uwriteln!(serial, "Turret {} sent steps", self.port);
     }
     /// This algorithim is based off of hard stopping occuring on the turret
     pub fn home(&mut self, serial: &mut Usart0<MHz16>, home_steps: i32) -> Result<(), StepperOpsError>{

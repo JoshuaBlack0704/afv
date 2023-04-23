@@ -59,7 +59,7 @@ fn main() -> ! {
 
    
     loop{
-        if socket0.server_connected(&mut spi, &mut cs, &mut serial){
+        if socket0.server_connected(&mut spi, &mut cs){
         }
     }
 }
