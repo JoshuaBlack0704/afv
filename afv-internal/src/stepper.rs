@@ -82,7 +82,7 @@ impl<S: OutputPin, D: OutputPin> StepperOps for StepperMotor<S,D>{
         if self.inverted{
             steps = -steps;
         }
-        let _ = ufmt::uwriteln!(serial, "Step command {}", steps);
+        // let _ = ufmt::uwriteln!(serial, "Step command {}", steps);
         if steps.is_positive(){
             let _ = self.dir.set_low();
         }
@@ -91,7 +91,7 @@ impl<S: OutputPin, D: OutputPin> StepperOps for StepperMotor<S,D>{
         }
 
         self.current_step += steps;
-        let _ = ufmt::uwriteln!(serial, "New current step {}", self.current_step);
+        // let _ = ufmt::uwriteln!(serial, "New current step {}", self.current_step);
 
 
         if let Some(max) = self.max_clockwise_step{
@@ -148,7 +148,7 @@ impl<S: OutputPin, D: OutputPin> StepperOps for StepperMotor<S,D>{
         if self.inverted{
             steps = -steps;
         }
-        let _ = ufmt::uwriteln!(serial, "To step to {}, from {} to {}", steps, self.current_step(), step);
+        // let _ = ufmt::uwriteln!(serial, "To step to {}, from {} to {}", steps, self.current_step(), step);
         self.step(steps, true, serial)
     }
 }

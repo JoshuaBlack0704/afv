@@ -297,7 +297,7 @@ impl Socket{
         self.write_cmd(Command::OPEN, spi, cs);
         loop{
             if let SocketStatus::Init = self.read_status(spi, cs){
-                let _ = ufmt::uwriteln!(serial, "Socket {} initialized", self.port);
+                // let _ = ufmt::uwriteln!(serial, "Socket {} initialized", self.port);
                 break;
             }
         }
@@ -524,14 +524,14 @@ impl Socket{
         let mut msg = None;
         if self.server_connected(spi, cs, serial){
             if !self.connected{
-                let _ = ufmt::uwriteln!(serial, "Socket {} connected", self.port);
+                // let _ = ufmt::uwriteln!(serial, "Socket {} connected", self.port);
                 self.connected = true;
             }
             msg = self.receive(spi, cs, serial);
         }
         else{
             if self.connected{
-                let _ = ufmt::uwriteln!(serial, "Socket {} disconnected", self.port);
+                // let _ = ufmt::uwriteln!(serial, "Socket {} disconnected", self.port);
                 self.connected = false;
             }
         }

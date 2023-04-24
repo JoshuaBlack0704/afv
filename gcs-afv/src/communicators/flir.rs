@@ -130,7 +130,7 @@ impl FlirSystemCommunicator {
         let mut net_rx = self.net_tx.subscribe();
 
         loop {
-            if let Ok(NetMessage::FlirOperator(FlirOperatorMessage::Analysis(analysis))) =
+            if let Ok(NetMessage::FlirOperator(FlirOperatorMessage::Analysis(Some(analysis)))) =
                 net_rx.recv().await
             {
                 let _ = self.image_analysis_watch.send(analysis);

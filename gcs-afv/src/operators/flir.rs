@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use afv_internal::FLIR_TURRET_PORT;
+use afv_internal::{FLIR_TURRET_PORT, turret::MAX_PAN_ANGLE};
 use glam::Vec2;
 use image::{DynamicImage, ImageBuffer};
 use log::{error, info, trace};
@@ -8,7 +8,7 @@ use openh264::{decoder::Decoder, nal_units, to_bitstream_with_001_be};
 use serde::{Deserialize, Serialize};
 use tokio::{
     sync::{broadcast, watch},
-    time::{sleep, Duration, Instant},
+    time::{sleep, Duration, Instant, timeout},
 };
 
 use crate::{drivers::{flir::FlirDriver, turret::TurretDriverMessage}, network::NetMessage};
@@ -21,7 +21,7 @@ pub const FLIRFOV: (f32, f32) = (29.0, 22.0);
 pub enum FlirOperatorMessage {
     Settings(FlirOperatorSettings),
     SetSettings(FlirOperatorSettings),
-    Analysis(FlirAnalysis),
+    Analysis(Option<FlirAnalysis>),
     AutoTarget,
 }
 
@@ -51,9 +51,7 @@ impl Default for FlirOperatorSettings {
 pub struct FlirOperator {
     net_tx: broadcast::Sender<NetMessage>,
     settings_watch: Arc<watch::Sender<FlirOperatorSettings>>,
-
     image_watch: Arc<watch::Sender<DynamicImage>>,
-
     flir_driver: FlirDriver,
 }
 
@@ -70,10 +68,10 @@ impl FlirOperator {
         tokio::spawn(operator.clone().settings_broadcast_task());
         tokio::spawn(operator.clone().nal_intake_task());
         tokio::spawn(operator.clone().analyze_image_task());
-        tokio::spawn(operator.clone().command_turret_task());
+        tokio::spawn(operator.clone().active_turret_task());
+        tokio::spawn(operator.clone().passive_turret_task());
         operator
     }
-
     async fn settings_update_task(self) {
         let mut net_rx = self.net_tx.subscribe();
         loop {
@@ -84,11 +82,11 @@ impl FlirOperator {
             }
         }
     }
-    async fn command_turret_task(self){
+    async fn active_turret_task(self){
         let mut net_rx = self.net_tx.subscribe();
         loop{
             match net_rx.recv().await{
-                Ok(NetMessage::FlirOperator(FlirOperatorMessage::Analysis(analysis))) => {
+                Ok(NetMessage::FlirOperator(FlirOperatorMessage::Analysis(Some(analysis)))) => {
                     info!("Commanding flir turret to {:?}", analysis.angle_change);
                     let _ = self.net_tx.send(NetMessage::TurretDriver(TurretDriverMessage::SetAngle(FLIR_TURRET_PORT, analysis.angle_change)));
                     sleep(Duration::from_millis(500)).await;
@@ -97,6 +95,31 @@ impl FlirOperator {
                 _ => {}
             }
         }
+    }
+    async fn passive_turret_task(self){
+        let mut net_rx = self.net_tx.subscribe();
+        let mut last_analysis = Instant::now();
+        let mut side = false;
+
+        loop{
+            if let Ok(Ok(NetMessage::FlirOperator(FlirOperatorMessage::Analysis(Some(_))))) = timeout(Duration::from_secs(AUTO_TARGET_REQUEST_INTERVAL), net_rx.recv()).await{
+                last_analysis = Instant::now();
+            }
+
+            if Instant::now().duration_since(last_analysis) < Duration::from_secs(AUTO_TARGET_REQUEST_INTERVAL){
+                continue;
+            }
+
+            if side{
+                let _ = self.net_tx.send(NetMessage::TurretDriver(TurretDriverMessage::SetAngle(FLIR_TURRET_PORT, [-MAX_PAN_ANGLE, 0.0])));
+            }
+            else{
+                let _ = self.net_tx.send(NetMessage::TurretDriver(TurretDriverMessage::SetAngle(FLIR_TURRET_PORT, [MAX_PAN_ANGLE, 0.0])));
+            }
+            
+            side = !side;
+        }
+        
     }
     async fn settings_broadcast_task(self) {
         let mut settings_rx = self.settings_watch.subscribe();
@@ -135,6 +158,7 @@ impl FlirOperator {
             }
 
             if pixels.len() <= 10 {
+                let _ = self.net_tx.send(NetMessage::FlirOperator(FlirOperatorMessage::Analysis(None)));
                 continue;
             }
 
@@ -187,7 +211,7 @@ impl FlirOperator {
             let _ = self
                 .net_tx
                 .send(NetMessage::FlirOperator(FlirOperatorMessage::Analysis(
-                    analysis,
+                    Some(analysis),
                 )));
         }
     }

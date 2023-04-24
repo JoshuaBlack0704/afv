@@ -85,13 +85,36 @@ impl TurretDriver{
     async fn set_steps_task(self){
         let mut net_rx = self.net_tx.subscribe();
         loop{
-            if let Ok(NetMessage::TurretDriver(TurretDriverMessage::SetAngle(port, [pan_angle, tilt_angle]))) = net_rx.recv().await{
-                if !port == self.port{continue;}
-                let pan_steps = stepper::convert_angle_steps(pan_angle, PAN_STEPPER_STEPS_REV);
-                let tilt_steps = stepper::convert_angle_steps(tilt_angle, TILT_STEPPER_STEPS_REV);
-                if let Some(msg) = InternalMessage::Turret(afv_internal::turret::TurretMsg::SetSteps(pan_steps, tilt_steps)).to_msg(){
-                    self.turret_socket.write_data(&msg).await;
+            let pan_angle_change: f32;
+            let tilt_angle_change: f32;
+
+            let pan_angle: f32;
+            let tilt_angle: f32;
+            
+            loop{
+                if let Ok(NetMessage::TurretDriver(TurretDriverMessage::SetAngle(port, [pan_angle_change_request, tilt_angle_change_request]))) = net_rx.recv().await{
+                    if !port == self.port{continue;}
+                    pan_angle_change = pan_angle_change_request;
+                    tilt_angle_change = tilt_angle_change_request;
+                    break;
                 }
+            }
+            loop{
+                if let Ok(NetMessage::TurretDriver(TurretDriverMessage::Angle(port, [current_pan_angle, current_tilt_angle]))) = net_rx.recv().await{
+                    if !port == self.port{continue;}
+                    pan_angle = current_pan_angle;
+                    tilt_angle = current_tilt_angle;
+                    break;
+                }
+            }
+
+            let new_pan_angle = pan_angle + pan_angle_change;
+            let new_tilt_angle = tilt_angle + tilt_angle_change;
+
+            debug!("Turret {} angle set to {} x {}", self.port, new_pan_angle, new_tilt_angle);
+
+            if let Some(msg) = InternalMessage::Turret(afv_internal::turret::TurretMsg::SetSteps((stepper::convert_angle_steps(new_pan_angle, PAN_STEPPER_STEPS_REV), stepper::convert_angle_steps(new_tilt_angle, TILT_STEPPER_STEPS_REV)))).to_msg(){
+                self.turret_socket.write_data(&msg).await;
             }
         }
     }
