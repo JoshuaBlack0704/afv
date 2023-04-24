@@ -1,9 +1,9 @@
-use std::net::{SocketAddr, Ipv4Addr};
+use std::net::SocketAddr;
 
 use afv_internal::{FLIR_TURRET_PORT, NOZZLE_TURRET_PORT};
-use tokio::{sync::broadcast, time::sleep, net::TcpStream};
+use tokio::{sync::broadcast, time::sleep};
 
-use crate::{network::{NetMessage, afv_bridge::AfvBridge, scanner::ScanCount}, drivers::{turret::TurretDriver, lidar::LidarDriver}};
+use crate::{network::{NetMessage, afv_bridge::AfvBridge, scanner::ScanCount}, drivers::{turret::TurretDriver, lidar::LidarDriver, pump::PumpDriver, lights::LightsDriver, siren::SirenDriver}};
 
 use super::{naming::NamingOperator, flir::FlirOperator};
 
@@ -28,6 +28,9 @@ pub async fn launch(client: bool, direct_connect: Option<SocketAddr>){
     tokio::spawn(TurretDriver::new(net_tx.clone(), FLIR_TURRET_PORT));
     tokio::spawn(TurretDriver::new(net_tx.clone(), NOZZLE_TURRET_PORT));
     tokio::spawn(LidarDriver::new(net_tx.clone()));
+    tokio::spawn(PumpDriver::new(net_tx.clone()));
+    tokio::spawn(LightsDriver::new(net_tx.clone()));
+    tokio::spawn(SirenDriver::new(net_tx.clone()));
     loop{
         sleep(tokio::time::Duration::from_secs(1)).await;
     }
@@ -41,4 +44,7 @@ pub async fn simulate(){
     tokio::spawn(TurretDriver::new(net_tx.clone(), FLIR_TURRET_PORT));
     tokio::spawn(TurretDriver::new(net_tx.clone(), NOZZLE_TURRET_PORT));
     tokio::spawn(LidarDriver::new(net_tx.clone()));
+    tokio::spawn(PumpDriver::new(net_tx.clone()));
+    tokio::spawn(LightsDriver::new(net_tx.clone()));
+    tokio::spawn(SirenDriver::new(net_tx.clone()));
 }

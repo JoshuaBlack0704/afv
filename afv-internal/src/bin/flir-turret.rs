@@ -2,7 +2,7 @@
 #![no_main]
 #![feature(abi_avr_interrupt)]
 
-use afv_internal::{turret::Turret, lidar::Lidar, stepper::StepperMotor, w5500::{socket_register::SocketBlock, W5500}, FLIR_TURRET_PORT, NOZZLE_TURRET_PORT, garmin_lidar_v3::GarminLidarV3};
+use afv_internal::{turret::Turret, lidar::Lidar, stepper::StepperMotor, w5500::{socket_register::SocketBlock, W5500}, FLIR_TURRET_PORT, NOZZLE_TURRET_PORT, garmin_lidar_v3::GarminLidarV3, pump::Pump, lights::Lights, sirens::Siren};
 use arduino_hal::{Spi, I2c};
 use embedded_hal::spi::{Polarity, Phase};
 use panic_halt as _;
@@ -44,11 +44,18 @@ fn main() -> ! {
     garmin_lidar.start_auto_measurement(&mut i2c, &mut serial);
     let mut lidar = Lidar::new(SocketBlock::SOCKET2, garmin_lidar, &mut spi, &mut cs, &mut serial);
 
+    let mut pump = Pump::new(SocketBlock::SOCKET3, pins.a0.into_output(), &mut spi, &mut cs, &mut serial);
+    let mut lights = Lights::new(SocketBlock::SOCKET4, pins.a1.into_output(), &mut spi, &mut cs, &mut serial);
+    let mut siren = Siren::new(SocketBlock::SOCKET5, pins.a2.into_output(), &mut spi, &mut cs, &mut serial);
+
 
 
     loop{
         flir_turret.process(&mut spi, &mut cs, &mut serial);
         nozzle_turret.process(&mut spi, &mut cs, &mut serial);
         lidar.process(&mut i2c, &mut spi, &mut cs, &mut serial);
+        pump.process(&mut spi, &mut cs, &mut serial);
+        lights.process(&mut spi, &mut cs, &mut serial);
+        siren.process(&mut spi, &mut cs, &mut serial);
     }
 }

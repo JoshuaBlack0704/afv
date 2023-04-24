@@ -60,6 +60,7 @@ pub const INT_MASK_SIZE:usize      = 1;
 pub const FRAG_OFST_SIZE:usize     = 2;
 pub const KEEP_ALV_TMR_SIZE:usize  = 1;
 
+#[derive(uDebug)]
 pub struct SocketBlock{
     ctl: Bsb,
     tx: Bsb,
@@ -266,10 +267,12 @@ impl BufferSize{
 
 pub struct Socket{
     socket_block: SocketBlock,
+    port: u16,
     peer_ip: Option<[u8;4]>,
     peer_mac: Option<[u8;6]>,
     peer_port: Option<u16>,
     last_msg: Option<InternalMessage>,
+    connected: bool,
 }
 
 impl W5500{
@@ -280,6 +283,8 @@ impl W5500{
             peer_mac: Default::default(),
             peer_port: Default::default(),
             last_msg: Default::default(),
+            connected: false,
+            port,
         };
         socket.write_mode(mode, spi, cs);
         socket.write_src_port(port, spi, cs);
@@ -291,8 +296,8 @@ impl Socket{
     pub fn init(&self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>, serial: &mut Usart0<MHz16>){
         self.write_cmd(Command::OPEN, spi, cs);
         loop{
-            let _ = ufmt::uwriteln!(serial, "LOOP");
             if let SocketStatus::Init = self.read_status(spi, cs){
+                let _ = ufmt::uwriteln!(serial, "Socket {} initialized", self.port);
                 break;
             }
         }
@@ -320,7 +325,7 @@ impl Socket{
     pub fn last_msg(&self) -> Option<InternalMessage> {
         self.last_msg.clone()
     }
-    pub fn receive(&mut self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>, serial: &mut Usart0<MHz16>) -> Option<InternalMessage>{
+    pub fn receive(&mut self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>, _serial: &mut Usart0<MHz16>) -> Option<InternalMessage>{
         if let SocketStatus::Closed = self.read_status(spi, cs){
             return None;
         }
@@ -332,7 +337,6 @@ impl Socket{
                 msg = Some(_msg);
             }
             let read_ptr = self.read_rx_read_ptr(spi, cs);
-            let _ = ufmt::uwriteln!(serial, "Read pointer: {}", read_ptr);
             self.write_rx_read_ptr(read_ptr + SOCKET_MSG_SIZE as u16, spi, cs);
             self.write_cmd(Command::RECV, spi, cs);
             return msg;
@@ -515,6 +519,23 @@ impl Socket{
         let header = header(SocketAddress::KEEP_ALV_TMR, ControlByte::new(self.socket_block.socket_ctl(), Rw::WRITE, Om::VDM));
         let timer = [timer.into()];
         write(header, &timer, spi, cs);
+    }
+    pub fn receive_connected(&mut self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>, serial: &mut Usart0<MHz16>) -> Option<InternalMessage> {
+        let mut msg = None;
+        if self.server_connected(spi, cs, serial){
+            if !self.connected{
+                let _ = ufmt::uwriteln!(serial, "Socket {} connected", self.port);
+                self.connected = true;
+            }
+            msg = self.receive(spi, cs, serial);
+        }
+        else{
+            if self.connected{
+                let _ = ufmt::uwriteln!(serial, "Socket {} disconnected", self.port);
+                self.connected = false;
+            }
+        }
+        msg
     }
     
 }

@@ -33,31 +33,42 @@ impl<L: I2cLidarOps> Lidar<L>{
     }
 
     pub fn process(&mut self, i2c: &mut I2c, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>, serial: &mut Usart0<MHz16>){
-        // let _ = ufmt::uwriteln!(serial, "Turret proccessing");
-        if self.socket.server_connected(spi, cs, serial){
-            if !self.socket_connected{
-                let _ = ufmt::uwriteln!(serial, "Lidar connected");
-                self.socket_connected = true;
-            }
-            if let Some(msg) = self.socket.receive(spi, cs, serial){
-                match msg{
-                    InternalMessage::Ping(_) => {
-                        self.socket.send(msg, spi, cs);
-                    },
-                    InternalMessage::Lidar(LidarMsg::PollLidar) => {
-                        let _ = ufmt::uwriteln!(serial, "Lidar distance polled");
-                        self.poll_distance(i2c, spi, cs, serial);
-                    }
-                    _ => {},
+        if let Some(msg) = self.socket.receive_connected(spi, cs, serial){
+            match msg{
+                InternalMessage::Ping(_) => {
+                    self.socket.send(msg, spi, cs);
+                },
+                InternalMessage::Lidar(LidarMsg::PollLidar) => {
+                    let _ = ufmt::uwriteln!(serial, "Lidar distance polled");
+                    self.poll_distance(i2c, spi, cs, serial);
                 }
+                _ => {},
             }
         }
-        else{
-            if self.socket_connected{
-                let _ = ufmt::uwriteln!(serial, "Lidar disconnected");
-                self.socket_connected= false;
-            }
-        }
+        // if self.socket.server_connected(spi, cs, serial){
+        //     if !self.socket_connected{
+        //         let _ = ufmt::uwriteln!(serial, "Lidar connected");
+        //         self.socket_connected = true;
+        //     }
+        //     if let Some(msg) = self.socket.receive(spi, cs, serial){
+        //         match msg{
+        //             InternalMessage::Ping(_) => {
+        //                 self.socket.send(msg, spi, cs);
+        //             },
+        //             InternalMessage::Lidar(LidarMsg::PollLidar) => {
+        //                 let _ = ufmt::uwriteln!(serial, "Lidar distance polled");
+        //                 self.poll_distance(i2c, spi, cs, serial);
+        //             }
+        //             _ => {},
+        //         }
+        //     }
+        // }
+        // else{
+        //     if self.socket_connected{
+        //         let _ = ufmt::uwriteln!(serial, "Lidar disconnected");
+        //         self.socket_connected= false;
+        //     }
+        // }
     }
     fn poll_distance(&mut self, i2c: &mut I2c, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>, serial: &mut Usart0<MHz16>){
         let _ = ufmt::uwriteln!(serial, "Lidar calculated distance");

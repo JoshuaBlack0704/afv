@@ -1,7 +1,7 @@
 use serde::{Serialize, Deserialize};
 use ufmt::derive::uDebug;
 
-use crate::{SOCKET_MSG_SIZE, turret::TurretMsg, lidar::LidarMsg};
+use crate::{SOCKET_MSG_SIZE, turret::TurretMsg, lidar::LidarMsg, pump::PumpMsg, lights::LightsMsg, sirens::SirenMsg};
 
 #[derive(uDebug, Serialize, Deserialize, Clone, Copy)]
 pub enum InternalMessage{
@@ -9,6 +9,9 @@ pub enum InternalMessage{
     FlirSignatureOffset([u8;2]),
     Turret(TurretMsg),
     Lidar(LidarMsg),
+    Pump(PumpMsg),
+    Lights(LightsMsg),
+    Siren(SirenMsg),
 }
 
 impl InternalMessage{

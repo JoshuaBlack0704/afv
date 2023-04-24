@@ -27,3 +27,9 @@ pub mod servo;
 pub mod mainctl;
 
 pub mod lidar;
+
+pub mod pump;
+
+pub mod lights;
+
+pub mod sirens;

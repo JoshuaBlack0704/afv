@@ -36,36 +36,23 @@ impl<PS:StepperOps, TS: StepperOps> Turret<PS, TS>{
         }
     }
     pub fn process(&mut self, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>, serial: &mut Usart0<MHz16>){
-        // let _ = ufmt::uwriteln!(serial, "Turret proccessing");
-        if self.socket.server_connected(spi, cs, serial){
-            if !self.socket_connected{
-                let _ = ufmt::uwriteln!(serial, "Turret {} connected", self.port);
-                self.socket_connected = true;
-            }
-            if let Some(msg) = self.socket.receive(spi, cs, serial){
-                match msg{
-                    InternalMessage::Ping(_) => {
-                        self.socket.send(msg, spi, cs);
-                    },
-                    InternalMessage::Turret(msg) => {
-                        match msg{
-                            TurretMsg::PollSteps => {
-                                let _ = ufmt::uwriteln!(serial, "Turret {} steps polled", self.port);
-                                self.poll_steps(spi, cs, serial)
-                            },
-                            TurretMsg::SetSteps(_, _) => {},
-                            _ => {}
-                        }
-                        
-                    },
-                    _ => {},
-                }
-            }
-        }
-        else{
-            if self.socket_connected{
-                let _ = ufmt::uwriteln!(serial, "Turret {} disconnected", self.port);
-                self.socket_connected= false;
+        if let Some(msg) = self.socket.receive_connected(spi, cs, serial){
+            match msg{
+                InternalMessage::Ping(_) => {
+                    self.socket.send(msg, spi, cs);
+                },
+                InternalMessage::Turret(msg) => {
+                    match msg{
+                        TurretMsg::PollSteps => {
+                            let _ = ufmt::uwriteln!(serial, "Turret {} steps polled", self.port);
+                            self.poll_steps(spi, cs, serial)
+                        },
+                        TurretMsg::SetSteps(_, _) => {},
+                        _ => {}
+                    }
+                    
+                },
+                _ => {},
             }
         }
     }
