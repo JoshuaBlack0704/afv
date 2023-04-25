@@ -53,13 +53,13 @@ fn main() -> ! {
     let mut socket0 = W5500::socket_n(SocketBlock::SOCKET0, mode, FLIR_TURRET_PORT, &mut spi, &mut cs);
     // let mut mainctl = MainCtl::new(socket0);
     
-    let pan = StepperMotor::new(pins.d5.into_output(), pins.d4.into_output(), None, None, 200, Some(16), 1000, false);
-    let tilt = StepperMotor::new(pins.d3.into_output(), pins.d2.into_output(), None, None, 200, Some(16), 1000, true);
+    let pan = StepperMotor::new(pins.d5.into_output(), pins.d4.into_output(), 100, -100, Some(16), 2000, 2000, false);
+    let tilt = StepperMotor::new(pins.d3.into_output(), pins.d2.into_output(), 100, -100, Some(16), 2000, 2000, true);
 
 
    
     loop{
-        if socket0.server_connected(&mut spi, &mut cs){
+        if socket0.server_connected(&mut spi, &mut cs, &mut serial){
         }
     }
 }

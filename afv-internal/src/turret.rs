@@ -2,7 +2,7 @@ use arduino_hal::{clock::MHz16, hal::{usart::Usart0, port::PB2}, Spi, spi::ChipS
 use serde::{Serialize, Deserialize};
 use ufmt::derive::uDebug;
 
-use crate::{stepper::{StepperOps, StepperOpsError}, w5500::{socket_register::{SocketBlock, self, Socket}, W5500}, network::InternalMessage};
+use crate::{stepper::StepperOps, w5500::{socket_register::{SocketBlock, self, Socket}, W5500}, network::InternalMessage};
 
 pub const MAX_PAN_ANGLE: f32 = 100.0; 
 
@@ -16,6 +16,7 @@ pub enum TurretMsg{
 /// Zero is at direct forward
 /// Left is [-max_degrees, 0]
 /// Right is [0, max_degrees]
+#[allow(unused)]
 pub struct Turret<PS: StepperOps, TS: StepperOps>{
     port: u16,
     socket: Socket,
@@ -68,26 +69,8 @@ impl<PS:StepperOps, TS: StepperOps> Turret<PS, TS>{
         // let _ = ufmt::uwriteln!(serial, "Turret {} sent steps", self.port);
     }
     fn set_steps(&mut self, steps: (i32, i32), serial: &mut Usart0<MHz16>){
-        let _ = self.pan_stepper.to_step(steps.0, serial);
-        let _ = self.tilt_stepper.to_step(steps.1, serial);
+        let _ = self.pan_stepper.to_step(steps.0, true, serial);
+        let _ = self.tilt_stepper.to_step(steps.1, true, serial);
         // let _ = ufmt::uwriteln!(serial, "Turret {} direction canged", self.port);
-    }
-    /// This algorithim is based off of hard stopping occuring on the turret
-    pub fn home(&mut self, serial: &mut Usart0<MHz16>, home_steps: i32) -> Result<(), StepperOpsError>{
-        self.pan_stepper.step(home_steps, true, serial)?;
-        
-        if let Err(_) = self.pan_stepper.to_step(0, serial){
-            // let _ = ufmt::uwriteln!(serial, "Pan Homing Error");
-        }
-        
-        self.tilt_stepper.step(home_steps, true, serial)?;
-        
-        if let Err(_) = self.tilt_stepper.to_step(0, serial){
-            // let _ = ufmt::uwriteln!(serial, "Pan Homing Error");
-        }
-        
-
-        // let _ = ufmt::uwriteln!(serial, "Pan tilt homed");
-        Ok(())
     }
 }

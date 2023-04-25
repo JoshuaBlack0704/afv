@@ -32,7 +32,6 @@ impl MainCtl{
                         // self.socket.send(msg, spi, cs);
                         return true;
                     },
-                    InternalMessage::FlirSignatureOffset(_) => todo!(),
                     _ => {},
                 }
             }

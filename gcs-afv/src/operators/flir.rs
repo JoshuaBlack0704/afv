@@ -8,7 +8,7 @@ use openh264::{decoder::Decoder, nal_units, to_bitstream_with_001_be};
 use serde::{Deserialize, Serialize};
 use tokio::{
     sync::{broadcast, watch},
-    time::{sleep, Duration, Instant, timeout},
+    time::{sleep, Duration, Instant, timeout, interval},
 };
 
 use crate::{drivers::{flir::FlirDriver, turret::TurretDriverMessage}, network::NetMessage};
@@ -69,7 +69,7 @@ impl FlirOperator {
         tokio::spawn(operator.clone().nal_intake_task());
         tokio::spawn(operator.clone().analyze_image_task());
         tokio::spawn(operator.clone().active_turret_task());
-        tokio::spawn(operator.clone().passive_turret_task());
+        // tokio::spawn(operator.clone().passive_turret_task());
         operator
     }
     async fn settings_update_task(self) {
@@ -90,7 +90,7 @@ impl FlirOperator {
                     info!("Commanding flir turret to {:?}", analysis.angle_change);
                     let _ = self.net_tx.send(NetMessage::TurretDriver(TurretDriverMessage::SetAngle(FLIR_TURRET_PORT, analysis.angle_change)));
                     sleep(Duration::from_millis(500)).await;
-                    net_rx.resubscribe();
+                    net_rx = self.net_tx.subscribe();
                 }
                 _ => {}
             }
@@ -98,18 +98,23 @@ impl FlirOperator {
     }
     async fn passive_turret_task(self){
         let mut net_rx = self.net_tx.subscribe();
-        let mut last_analysis = Instant::now();
+        let mut last_empty_analysis = Instant::now();
+        let mut interval = interval(Duration::from_secs(AUTO_TARGET_REQUEST_INTERVAL));
         let mut side = false;
 
+        interval.tick().await;
+
         loop{
-            if let Ok(Ok(NetMessage::FlirOperator(FlirOperatorMessage::Analysis(Some(_))))) = timeout(Duration::from_secs(AUTO_TARGET_REQUEST_INTERVAL), net_rx.recv()).await{
-                last_analysis = Instant::now();
+            if let Ok(Ok(NetMessage::FlirOperator(FlirOperatorMessage::Analysis(None)))) = timeout(Duration::from_secs(AUTO_TARGET_REQUEST_INTERVAL), net_rx.recv()).await{
+                last_empty_analysis = Instant::now();
             }
 
-            if Instant::now().duration_since(last_analysis) < Duration::from_secs(AUTO_TARGET_REQUEST_INTERVAL){
+            if Instant::now().duration_since(last_empty_analysis) > Duration::from_secs(AUTO_TARGET_REQUEST_INTERVAL){
                 continue;
             }
 
+            interval.tick().await;
+            
             if side{
                 let _ = self.net_tx.send(NetMessage::TurretDriver(TurretDriverMessage::SetAngle(FLIR_TURRET_PORT, [-MAX_PAN_ANGLE, 0.0])));
             }
@@ -257,7 +262,7 @@ impl FlirOperator {
                 info!("Flir operator staring auto target");
                 last_poll = Instant::now();
             }
-            nal_rx.resubscribe();
+            nal_rx = self.flir_driver.ir_stream_rx();
         }
     }
     /// Takes nal data BEFORE breaking it with to_bitstream

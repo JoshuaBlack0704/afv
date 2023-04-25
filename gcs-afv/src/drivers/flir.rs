@@ -229,7 +229,7 @@ impl FlirDriver {
                 debug!("Flir driver starting network ir stream");
                 last_poll = Instant::now();
             }
-            nal_rx.resubscribe();
+            nal_rx = self.ir_nal_stream.subscribe();
         }
     }
     async fn network_visual_stream(self) {
@@ -259,7 +259,7 @@ impl FlirDriver {
                 debug!("Flir driver starting network visual stream");
                 last_poll = Instant::now();
             }
-            stream_rx.resubscribe();
+            stream_rx = self.visual_nal_stream.subscribe();
         }
     }
 }

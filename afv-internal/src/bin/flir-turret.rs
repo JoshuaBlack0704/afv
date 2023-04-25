@@ -2,20 +2,21 @@
 #![no_main]
 #![feature(abi_avr_interrupt)]
 
-use afv_internal::{turret::Turret, stepper::StepperMotor, w5500::{socket_register::SocketBlock, W5500}, FLIR_TURRET_PORT};
+use afv_internal::{w5500::{socket_register::SocketBlock, W5500}, garmin_lidar_v3::GarminLidarV3, lidar::Lidar, stepper::{StepperMotor, StepperOps}, turret::Turret, FLIR_TURRET_PORT};
 use arduino_hal::{Spi, I2c};
 use embedded_hal::spi::{Polarity, Phase};
 use panic_halt as _;
 
-const GATEWAY: [u8;4] = [10,192,138,254];
+const GATEWAY: [u8;4] = [192,168,4,1];
 const SUBNET: [u8;4] = [255,255,255,0];
 const MAC: [u8;6] = [0x00,0x08,0xdc,0x01,0x02,0x03];
-const IP: [u8;4] = [10,192,138,20];
+const IP: [u8;4] = [192,168,4,20];
 
 #[arduino_hal::entry]
 fn main() -> ! {
     let peripherals = arduino_hal::Peripherals::take().unwrap();
     let pins = arduino_hal::pins!(peripherals);
+    pins.a0.into_output_high();
     let mut serial = arduino_hal::default_serial!(peripherals, pins, 57600);    
     let mut cs = pins.d10.into_output();
     cs.set_high();
@@ -32,8 +33,9 @@ fn main() -> ! {
     let (_, _) = W5500::new(Default::default(), GATEWAY, SUBNET, MAC, IP, &mut spi, &mut cs, &mut serial);
 
 
-    let pan = StepperMotor::new(pins.d5.into_output(), pins.d4.into_output(), None, None, 200, Some(16), 1000, false);
-    let tilt = StepperMotor::new(pins.d3.into_output(), pins.d2.into_output(), None, None, 200, Some(16), 1000, true);
+    let pan = StepperMotor::new(pins.d5.into_output(), pins.d4.into_output(), 266, -60, Some(16), 2000, 2000, false);
+    let mut tilt = StepperMotor::new(pins.d3.into_output(), pins.d2.into_output(), 300, -60, Some(16), 2000, 2000, false);
+    tilt.home(300, &mut serial);
     let mut flir_turret = Turret::new(pan, tilt, FLIR_TURRET_PORT, SocketBlock::SOCKET0, &mut spi, &mut cs, &mut serial);
     
     // let pan = StepperMotor::new(pins.d9.into_output(), pins.d8.into_output(), None, None, 200, Some(16), 1000, false);
@@ -51,6 +53,7 @@ fn main() -> ! {
 
 
     loop{
+        // let _ = flir_turret.home(&mut serial, 100);
         flir_turret.process(&mut spi, &mut cs, &mut serial);
         // nozzle_turret.process(&mut spi, &mut cs, &mut serial);
         // lidar.process(&mut i2c, &mut spi, &mut cs, &mut serial);

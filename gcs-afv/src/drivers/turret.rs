@@ -111,7 +111,7 @@ impl TurretDriver{
             let new_pan_angle = pan_angle + pan_angle_change;
             let new_tilt_angle = tilt_angle + tilt_angle_change;
 
-            debug!("Turret {} angle set to {} x {}", self.port, new_pan_angle, new_tilt_angle);
+            info!("Turret {} angle set to {} x {}", self.port, new_pan_angle, new_tilt_angle);
 
             if let Some(msg) = InternalMessage::Turret(afv_internal::turret::TurretMsg::SetSteps((stepper::convert_angle_steps(new_pan_angle, PAN_STEPPER_STEPS_REV), stepper::convert_angle_steps(new_tilt_angle, TILT_STEPPER_STEPS_REV)))).to_msg(){
                 self.turret_socket.write_data(&msg).await;
