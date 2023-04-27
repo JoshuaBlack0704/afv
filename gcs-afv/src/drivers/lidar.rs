@@ -5,7 +5,7 @@ use tokio::{sync::broadcast, time::{Duration, sleep}};
 
 use crate::network::{NetMessage, socket::Socket, scanner::{ScanCount, ScanBuilder}};
 
-pub const POLL_LIDAR_INTERNVAL: u64 = 1;
+pub const POLL_LIDAR_INTERNVAL: Duration= Duration::from_millis(500);
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum LidarDriverMessage{
@@ -57,7 +57,7 @@ impl LidarDriver{
     }
     async fn poll_lidar_task(self){
         loop{
-            sleep(Duration::from_secs(POLL_LIDAR_INTERNVAL)).await;
+            sleep(POLL_LIDAR_INTERNVAL).await;
             debug!("Polling lidar for distance");
             if let Some(msg) = InternalMessage::Lidar(LidarMsg::PollLidar).to_msg(){
                 self.lidar_socket.write_data(&msg).await;

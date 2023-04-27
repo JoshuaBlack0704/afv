@@ -7,9 +7,9 @@ use log::{info, debug};
 use serde::{Serialize, Deserialize};
 use tokio::{sync::broadcast, time::{sleep, Duration}, net::TcpStream};
 
-use crate::network::{NetMessage, socket::Socket, scanner::{ScanBuilder, ScanCount}};
+use crate::network::{NetMessage, socket::Socket, scanner::{ScanCount, ScanBuilder}};
 
-pub const POLL_STEPS_INTERVAL: u64 = 1;
+pub const POLL_STEPS_INTERVAL: Duration= Duration::from_millis(500);
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum TurretDriverMessage{
@@ -26,18 +26,18 @@ pub struct TurretDriver{
 
 impl TurretDriver{
     pub async fn new(net_tx: broadcast::Sender<NetMessage>, port: u16) -> Option<Self>{
-        // let turret_socket = match ScanBuilder::default().scan_count(ScanCount::Infinite).add_port(port).dispatch().recv_async().await{
-        //     Ok(stream) => {
-        //         Socket::new(stream, false)
-        //     },
-        //     Err(_) => return None,
-        // };
-
-        let stream = match TcpStream::connect((Ipv4Addr::new(192,168,4,20), port)).await{
-            Ok(s) => s,
-            _ => return None
+        let turret_socket = match ScanBuilder::default().scan_count(ScanCount::Infinite).add_port(port).dispatch().recv_async().await{
+            Ok(stream) => {
+                Socket::new(stream, false)
+            },
+            Err(_) => return None,
         };
-        let turret_socket = Socket::new(stream, false);
+
+        // let stream = match TcpStream::connect((Ipv4Addr::new(192,168,4,20), port)).await{
+        //     Ok(s) => s,
+        //     _ => return None
+        // };
+        // let turret_socket = Socket::new(stream, false);
 
         info!("Turret {} connected to MCU", port);
 
@@ -82,7 +82,7 @@ impl TurretDriver{
 
     async fn poll_steps_task(self){
         loop{
-            sleep(Duration::from_secs(POLL_STEPS_INTERVAL)).await;
+            sleep(POLL_STEPS_INTERVAL).await;
             debug!("Polling turret {} for steps", self.port);
             if let Some(msg) = InternalMessage::Turret(afv_internal::turret::TurretMsg::PollSteps).to_msg(){
                 self.turret_socket.write_data(&msg).await;

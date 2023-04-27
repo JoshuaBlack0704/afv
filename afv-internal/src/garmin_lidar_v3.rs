@@ -123,6 +123,7 @@ impl GarminLidarV3{
     pub fn read_last_measurement(&mut self, i2c: &mut I2c, _serial: &mut Usart0<MHz16>) -> u16 {
         let cmd: [u8; 1] = [Into::<u8>::into(ControlRegister::LAST_DELAY_HIGH) | 0b10000000];
         let mut data = [0u8; 2];
+        let _ = ufmt::uwriteln!(_serial, "Reading i2c");
         let _ = i2c.write_read(self.address, &cmd, &mut data);
 
         u16::from_be_bytes(data)

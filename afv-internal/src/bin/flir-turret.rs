@@ -2,7 +2,7 @@
 #![no_main]
 #![feature(abi_avr_interrupt)]
 
-use afv_internal::{w5500::{socket_register::SocketBlock, W5500}, garmin_lidar_v3::GarminLidarV3, lidar::Lidar, stepper::{StepperMotor, StepperOps}, turret::Turret, FLIR_TURRET_PORT};
+use afv_internal::{w5500::{socket_register::SocketBlock, W5500}, garmin_lidar_v3::GarminLidarV3, lidar::Lidar, stepper::{StepperMotor, StepperOps}, turret::Turret, FLIR_TURRET_PORT, NOZZLE_TURRET_PORT};
 use arduino_hal::{Spi, I2c};
 use embedded_hal::spi::{Polarity, Phase};
 use panic_halt as _;
@@ -16,7 +16,7 @@ const IP: [u8;4] = [192,168,4,20];
 fn main() -> ! {
     let peripherals = arduino_hal::Peripherals::take().unwrap();
     let pins = arduino_hal::pins!(peripherals);
-    pins.a0.into_output_high();
+    // pins.a0.into_output_high();
     let mut serial = arduino_hal::default_serial!(peripherals, pins, 57600);    
     let mut cs = pins.d10.into_output();
     cs.set_high();
@@ -33,18 +33,20 @@ fn main() -> ! {
     let (_, _) = W5500::new(Default::default(), GATEWAY, SUBNET, MAC, IP, &mut spi, &mut cs, &mut serial);
 
 
-    let mut pan = StepperMotor::new(pins.d3.into_output(), pins.d2.into_output(), 92, -1000, Some(16), 1000, 500, true);
-    pan.home(250, &mut serial);
-    let mut tilt = StepperMotor::new(pins.d5.into_output(), pins.d4.into_output(), 266, -60, Some(16), 2000, 1000, false);
-    tilt.home(266, &mut serial);
+    let mut pan = StepperMotor::new(pins.d5.into_output(), pins.d4.into_output(), 92, -1000, Some(16), 1000, 500, true);
+    // pan.home(250, &mut serial);
+    let mut tilt = StepperMotor::new(pins.d3.into_output(), pins.d2.into_output(), 266, -60, Some(16), 2000, 1000, false);
+    // tilt.home(266, &mut serial);
     let mut flir_turret = Turret::new(pan, tilt, FLIR_TURRET_PORT, SocketBlock::SOCKET0, &mut spi, &mut cs, &mut serial);
     
-    // let pan = StepperMotor::new(pins.d9.into_output(), pins.d8.into_output(), None, None, 200, Some(16), 1000, false);
-    // let tilt = StepperMotor::new(pins.d7.into_output(), pins.d6.into_output(), None, None, 200, Some(16), 1000, true);
-    // let mut nozzle_turret = Turret::new(pan, tilt, NOZZLE_TURRET_PORT, SocketBlock::SOCKET1, &mut spi, &mut cs, &mut serial);
+    let mut pan = StepperMotor::new(pins.a0.into_output(), pins.a1.into_output(), 330, -1000, Some(16), 1000, 500, false);
+    pan.home(300, &mut serial);
+    let mut tilt = StepperMotor::new(pins.a2.into_output(), pins.a3.into_output(), 10, -60, Some(16), 2000, 1000, false);
+    tilt.home(266, &mut serial);
+    let mut nozzle_turret = Turret::new(pan, tilt, NOZZLE_TURRET_PORT, SocketBlock::SOCKET1, &mut spi, &mut cs, &mut serial);
     
     let mut garmin_lidar = GarminLidarV3::new(None, &mut serial);
-    // garmin_lidar.start_auto_measurement(&mut i2c, &mut serial);
+    garmin_lidar.start_auto_measurement(&mut i2c, &mut serial);
     let mut lidar = Lidar::new(SocketBlock::SOCKET2, garmin_lidar, &mut spi, &mut cs, &mut serial);
 
     // let mut pump = Pump::new(SocketBlock::SOCKET3, pins.a0.into_output(), &mut spi, &mut cs, &mut serial);
@@ -55,9 +57,9 @@ fn main() -> ! {
 
     let _ = ufmt::uwriteln!(&mut serial, "Staring Flir turret loop");
     loop{
-        // let _ = flir_turret.home(&mut serial, 100);
+        // lidar.poll_distance(&mut i2c, &mut spi, &mut cs, &mut serial);
         flir_turret.process(&mut spi, &mut cs, &mut serial);
-        // nozzle_turret.process(&mut spi, &mut cs, &mut serial);
+        nozzle_turret.process(&mut spi, &mut cs, &mut serial);
         lidar.process(&mut i2c, &mut spi, &mut cs, &mut serial);
         // pump.process(&mut spi, &mut cs, &mut serial);
         // lights.process(&mut spi, &mut cs, &mut serial);

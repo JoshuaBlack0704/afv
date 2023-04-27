@@ -44,8 +44,9 @@ impl<L: I2cLidarOps> Lidar<L>{
             }
         }
     }
-    fn poll_distance(&mut self, i2c: &mut I2c, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>, serial: &mut Usart0<MHz16>){
-        let _ = ufmt::uwriteln!(serial, "Lidar calculated distance");
+    pub fn poll_distance(&mut self, i2c: &mut I2c, spi: &mut Spi, cs: &mut ChipSelectPin<PB2>, serial: &mut Usart0<MHz16>){
+        let distance = self.lidar.read_distance_cm(i2c, serial);
+        let _ = ufmt::uwriteln!(serial, "Lidar calculated distance {}", distance);
         let msg = InternalMessage::Lidar(LidarMsg::LidarDistanceCm(self.lidar.read_distance_cm(i2c, serial) as u32));
         self.socket.send(msg, spi, cs);
         let _ = ufmt::uwriteln!(serial, "Lidar sent distance");
