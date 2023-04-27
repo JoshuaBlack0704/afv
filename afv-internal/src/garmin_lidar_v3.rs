@@ -113,7 +113,7 @@ impl GarminLidarV3{
     }
     pub fn start_auto_measurement(&mut self, i2c: &mut I2c, _serial: &mut Usart0<MHz16>){
         // First we write to outer loop count
-        let mut cmd = [ControlRegister::OUTER_LOOP_COUNT.into(), 0xff];
+        let mut cmd:[u8;2] = [ControlRegister::OUTER_LOOP_COUNT.into(), 0xff];
         let _ = i2c.write(self.address, &cmd);
         // Then we do the initial measurement
         cmd = [ControlRegister::ACQ_COMMAND.into(), AcqCommand::MEASURE_DIST_CORRECTION.into()];
