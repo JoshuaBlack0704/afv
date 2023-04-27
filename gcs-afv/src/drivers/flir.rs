@@ -1,12 +1,14 @@
+use std::sync::Arc;
+
 use futures::StreamExt;
-use log::{debug, info};
+use log::info;
 use retina::{
     client::{self, PlayOptions, SessionOptions, SetupOptions},
     codec::CodecItem,
 };
 use serde::{Deserialize, Serialize};
 use tokio::{
-    sync::broadcast,
+    sync::{broadcast, watch},
     time::{Duration, Instant, sleep},
 };
 use url::Url;
@@ -16,7 +18,7 @@ use crate::network::{
     NetMessage,
 };
 
-pub const STREAM_REQUEST_INTERVAL: u64 = 1;
+pub const STREAM_REQUEST_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum FlirDriverMessage {
@@ -31,6 +33,9 @@ pub struct FlirDriver {
     net_tx: broadcast::Sender<NetMessage>,
     ir_nal_stream: broadcast::Sender<Vec<u8>>,
     visual_nal_stream: broadcast::Sender<Vec<u8>>,
+
+    ir_network_watch: Arc<watch::Sender<Instant>>,
+    visual_network_watch: Arc<watch::Sender<Instant>>,
 }
 
 impl FlirDriver {
@@ -39,6 +44,8 @@ impl FlirDriver {
             ir_nal_stream: broadcast::channel(100).0,
             visual_nal_stream: broadcast::channel(100).0,
             net_tx,
+            ir_network_watch: Arc::new(watch::channel(Instant::now()).0),
+            visual_network_watch: Arc::new(watch::channel(Instant::now()).0),
         };
 
         tokio::spawn(driver.clone().ir_stream_task());
@@ -48,11 +55,30 @@ impl FlirDriver {
 
         tokio::spawn(driver.clone().network_ir_stream_task());
         tokio::spawn(driver.clone().network_visual_stream());
+        tokio::spawn(driver.clone().network_ir_stream_watch_task());
+        tokio::spawn(driver.clone().network_visual_stream_watch_task());
 
         driver
     }
     pub fn ir_stream_rx(&self) -> broadcast::Receiver<Vec<u8>> {
         self.ir_nal_stream.subscribe()
+    }
+    async fn network_ir_stream_watch_task(self){
+        let mut net_rx = self.net_tx.subscribe();
+
+        loop{
+            if let Ok(NetMessage::FlirDriver(FlirDriverMessage::OpenIrStream)) = net_rx.recv().await{
+                let _ = self.ir_network_watch.send(Instant::now());
+            }
+        }
+    }
+    async fn network_visual_stream_watch_task(self){
+        let mut net_rx = self.net_tx.subscribe();
+        loop{
+            if let Ok(NetMessage::FlirDriver(FlirDriverMessage::OpenVisualStream)) = net_rx.recv().await{
+                let _ = self.visual_network_watch.send(Instant::now());
+            }
+        }
     }
 
     async fn ir_stream_task(self) {
@@ -204,62 +230,45 @@ impl FlirDriver {
         }
     }
     async fn network_ir_stream_task(self) {
-        let mut net_rx = self.net_tx.subscribe();
         let mut nal_rx = self.ir_nal_stream.subscribe();
-        let mut last_poll = Instant::now();
-        sleep(Duration::from_secs(STREAM_REQUEST_INTERVAL + 1)).await;
+        let mut request_watch = self.ir_network_watch.subscribe();
+        sleep(STREAM_REQUEST_INTERVAL + Duration::from_secs(1)).await;
 
         loop {
-            while Instant::now().duration_since(last_poll)
-                < Duration::from_secs(STREAM_REQUEST_INTERVAL)
-            {
-                if let Ok(NetMessage::FlirDriver(FlirDriverMessage::OpenIrStream)) =
-                    net_rx.try_recv()
-                {
-                    last_poll = Instant::now()
-                }
-                if let Ok(nal) = nal_rx.recv().await {
-                    let _ = self
-                        .net_tx
-                        .send(NetMessage::FlirDriver(FlirDriverMessage::NalPacket(nal)));
-                }
+            if Instant::now().duration_since(*request_watch.borrow_and_update()) > STREAM_REQUEST_INTERVAL{
+                info!("Network IR stream stopped");
+                let _ = request_watch.changed().await;
+                nal_rx = self.ir_nal_stream.subscribe();
+                info!("Staring network IR stream");
+                continue;
             }
-            if let Ok(NetMessage::FlirDriver(FlirDriverMessage::OpenIrStream)) = net_rx.recv().await
-            {
-                debug!("Flir driver starting network ir stream");
-                last_poll = Instant::now();
+
+            if let Ok(nal) = nal_rx.recv().await{
+                let _ = self
+                    .net_tx
+                    .send(NetMessage::FlirDriver(FlirDriverMessage::NalPacket(nal)));
             }
-            nal_rx = self.ir_nal_stream.subscribe();
         }
     }
     async fn network_visual_stream(self) {
-        let mut net_rx = self.net_tx.subscribe();
-        let mut stream_rx = self.visual_nal_stream.subscribe();
-        let mut last_poll = Instant::now();
-        sleep(Duration::from_secs(STREAM_REQUEST_INTERVAL + 1)).await;
+        let mut nal_rx = self.visual_nal_stream.subscribe();
+        let mut request_watch = self.visual_network_watch.subscribe();
+        sleep(STREAM_REQUEST_INTERVAL + Duration::from_secs(1)).await;
 
         loop {
-            while Instant::now().duration_since(last_poll)
-                < Duration::from_secs(STREAM_REQUEST_INTERVAL)
-            {
-                if let Ok(NetMessage::FlirDriver(FlirDriverMessage::OpenVisualStream)) =
-                    net_rx.try_recv()
-                {
-                    last_poll = Instant::now()
-                }
-                if let Ok(nal) = stream_rx.recv().await {
-                    let _ = self
-                        .net_tx
-                        .send(NetMessage::FlirDriver(FlirDriverMessage::NalPacket(nal)));
-                }
+            if Instant::now().duration_since(*request_watch.borrow_and_update()) > STREAM_REQUEST_INTERVAL{
+                info!("Network visual stream stopped");
+                let _ = request_watch.changed().await;
+                nal_rx = self.visual_nal_stream.subscribe();
+                info!("Staring network visual stream");
+                continue;
             }
-            if let Ok(NetMessage::FlirDriver(FlirDriverMessage::OpenVisualStream)) =
-                net_rx.recv().await
-            {
-                debug!("Flir driver starting network visual stream");
-                last_poll = Instant::now();
+
+            if let Ok(nal) = nal_rx.recv().await{
+                let _ = self
+                    .net_tx
+                    .send(NetMessage::FlirDriver(FlirDriverMessage::NalPacket(nal)));
             }
-            stream_rx = self.visual_nal_stream.subscribe();
         }
     }
 }

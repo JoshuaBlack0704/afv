@@ -1,9 +1,9 @@
-use std::net::Ipv4Addr;
 
-use afv_internal::{network::InternalMessage, SOCKET_MSG_SIZE, PAN_STEPPER_STEPS_REV, TILT_STEPPER_STEPS_REV, stepper::{StepperOps, self}, FLIR_TURRET_PORT};
-use log::{trace, info, debug};
+
+use afv_internal::{network::InternalMessage, SOCKET_MSG_SIZE, PAN_STEPPER_STEPS_REV, TILT_STEPPER_STEPS_REV, stepper};
+use log::{info, debug};
 use serde::{Serialize, Deserialize};
-use tokio::{sync::broadcast, time::{sleep, Duration}, net::TcpStream};
+use tokio::{sync::broadcast, time::{sleep, Duration}};
 
 use crate::network::{NetMessage, socket::Socket, scanner::{ScanBuilder, ScanCount}};
 
@@ -99,6 +99,7 @@ impl TurretDriver{
                     break;
                 }
             }
+            
             loop{
                 if let Ok(NetMessage::TurretDriver(TurretDriverMessage::Angle(port, [current_pan_angle, current_tilt_angle]))) = net_rx.recv().await{
                     if !port == self.port{continue;}
@@ -116,6 +117,8 @@ impl TurretDriver{
             if let Some(msg) = InternalMessage::Turret(afv_internal::turret::TurretMsg::SetSteps((stepper::convert_angle_steps(new_pan_angle, PAN_STEPPER_STEPS_REV), stepper::convert_angle_steps(new_tilt_angle, TILT_STEPPER_STEPS_REV)))).to_msg(){
                 self.turret_socket.write_data(&msg).await;
             }
+
+            net_rx = self.net_tx.subscribe();
         }
     }
 }

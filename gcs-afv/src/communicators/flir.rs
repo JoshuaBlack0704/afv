@@ -20,7 +20,7 @@ use tokio::{
 use crate::{
     drivers::flir::FlirDriverMessage,
     network::NetMessage,
-    operators::flir::{FlirAnalysis, FlirOperator, FlirOperatorMessage, FlirOperatorSettings},
+    operators::flir::{FlirAnalysis, FlirOperator, FlirOperatorMessage, FlirOperatorSettings, self},
     ui::Renderable,
 };
 
@@ -158,7 +158,7 @@ impl FlirSystemCommunicator {
     async fn auto_target_request_task(self) {
         loop {
             self.auto_target_request_notify.notified().await;
-            sleep(Duration::from_secs(1)).await;
+            sleep(flir::AUTO_TARGET_REQUEST_WAIT).await;
             let _ = self
                 .net_tx
                 .send(NetMessage::FlirOperator(FlirOperatorMessage::AutoTarget));

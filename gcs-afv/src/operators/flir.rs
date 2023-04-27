@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use afv_internal::{FLIR_TURRET_PORT, turret::MAX_PAN_ANGLE};
+use afv_internal::FLIR_TURRET_PORT;
 use glam::Vec2;
 use image::{DynamicImage, ImageBuffer};
 use log::{error, info, trace};
@@ -8,13 +8,14 @@ use openh264::{decoder::Decoder, nal_units, to_bitstream_with_001_be};
 use serde::{Deserialize, Serialize};
 use tokio::{
     sync::{broadcast, watch},
-    time::{sleep, Duration, Instant, timeout, interval},
+    time::{sleep, Duration, Instant},
 };
 
 use crate::{drivers::{flir::FlirDriver, turret::TurretDriverMessage}, network::NetMessage};
 
-pub const BROADCAST_SETTINGS_INTERVAL: u64 = 5;
-pub const AUTO_TARGET_REQUEST_INTERVAL: u64 = 1;
+pub const BROADCAST_SETTINGS_INTERVAL: Duration = Duration::from_secs(5);
+pub const AUTO_TARGET_REQUEST_INTERVAL: Duration = Duration::from_secs(1);
+pub const AUTO_TARGET_REQUEST_WAIT: Duration = Duration::from_millis(500);
 pub const FLIRFOV: (f32, f32) = (29.0, 22.0);
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -52,6 +53,7 @@ pub struct FlirOperator {
     net_tx: broadcast::Sender<NetMessage>,
     settings_watch: Arc<watch::Sender<FlirOperatorSettings>>,
     image_watch: Arc<watch::Sender<DynamicImage>>,
+    auto_target_watch: Arc<watch::Sender<Instant>>,
     flir_driver: FlirDriver,
 }
 
@@ -62,15 +64,25 @@ impl FlirOperator {
             net_tx,
             settings_watch: Arc::new(watch::channel(Default::default()).0),
             image_watch: Arc::new(watch::channel(Default::default()).0),
+            auto_target_watch: Arc::new(watch::channel(Instant::now()).0),
         };
 
         tokio::spawn(operator.clone().settings_update_task());
         tokio::spawn(operator.clone().settings_broadcast_task());
         tokio::spawn(operator.clone().nal_intake_task());
         tokio::spawn(operator.clone().analyze_image_task());
-        tokio::spawn(operator.clone().active_turret_task());
-        // tokio::spawn(operator.clone().passive_turret_task());
+        tokio::spawn(operator.clone().auto_target_task());
+        tokio::spawn(operator.clone().auto_target_watch_task());
         operator
+    }
+    async fn auto_target_watch_task(self){
+        let mut net_rx = self.net_tx.subscribe();
+
+        loop{
+            if let Ok(NetMessage::FlirOperator(FlirOperatorMessage::AutoTarget)) = net_rx.recv().await{
+                let _ = self.auto_target_watch.send(Instant::now());
+            }
+        }
     }
     async fn settings_update_task(self) {
         let mut net_rx = self.net_tx.subscribe();
@@ -82,49 +94,36 @@ impl FlirOperator {
             }
         }
     }
-    async fn active_turret_task(self){
+    async fn auto_target_task(self){
         let mut net_rx = self.net_tx.subscribe();
-        loop{
-            match net_rx.recv().await{
-                Ok(NetMessage::FlirOperator(FlirOperatorMessage::Analysis(Some(analysis)))) => {
-                    info!("Commanding flir turret to {:?}", analysis.angle_change);
-                    let _ = self.net_tx.send(NetMessage::TurretDriver(TurretDriverMessage::SetAngle(FLIR_TURRET_PORT, analysis.angle_change)));
-                    sleep(Duration::from_millis(500)).await;
-                    net_rx = self.net_tx.subscribe();
-                }
-                _ => {}
-            }
-        }
-    }
-    async fn passive_turret_task(self){
-        let mut net_rx = self.net_tx.subscribe();
-        let mut last_empty_analysis = Instant::now();
-        let mut interval = interval(Duration::from_secs(AUTO_TARGET_REQUEST_INTERVAL));
-        let mut side = false;
-
-        interval.tick().await;
+        let mut auto_target_watch = self.auto_target_watch.subscribe();
+        sleep(AUTO_TARGET_REQUEST_INTERVAL + Duration::from_secs(1)).await;
+        
+        let mut loop_count:f32 = 0.0;
 
         loop{
-            if let Ok(Ok(NetMessage::FlirOperator(FlirOperatorMessage::Analysis(None)))) = timeout(Duration::from_secs(AUTO_TARGET_REQUEST_INTERVAL), net_rx.recv()).await{
-                last_empty_analysis = Instant::now();
-            }
-
-            if Instant::now().duration_since(last_empty_analysis) > Duration::from_secs(AUTO_TARGET_REQUEST_INTERVAL){
+            if Instant::now().duration_since(*auto_target_watch.borrow_and_update()) > AUTO_TARGET_REQUEST_INTERVAL{
+                let _ = auto_target_watch.changed().await;
+                info!("Staring flir operator auto target");
                 continue;
             }
 
-            interval.tick().await;
-            
-            if side{
-                let _ = self.net_tx.send(NetMessage::TurretDriver(TurretDriverMessage::SetAngle(FLIR_TURRET_PORT, [-MAX_PAN_ANGLE, 0.0])));
+            match net_rx.recv().await{
+                Ok(NetMessage::FlirOperator(FlirOperatorMessage::Analysis(Some(analysis)))) => {
+                    info!("Commanding flir turret to changle {:?} deg", analysis.angle_change);
+                    let _ = self.net_tx.send(NetMessage::TurretDriver(TurretDriverMessage::SetAngle(FLIR_TURRET_PORT, analysis.angle_change)));
+                    
+                },
+                Ok(NetMessage::FlirOperator(FlirOperatorMessage::Analysis(None))) => {
+                    let angle:f32 = loop_count.sin() * 90.0;
+                    info!("Commanding flir turret rotate {} deg", angle);
+                    let _ = self.net_tx.send(NetMessage::TurretDriver(TurretDriverMessage::SetAngle(FLIR_TURRET_PORT, [angle, 0.0])));
+                },
+                _ => {}
             }
-            else{
-                let _ = self.net_tx.send(NetMessage::TurretDriver(TurretDriverMessage::SetAngle(FLIR_TURRET_PORT, [MAX_PAN_ANGLE, 0.0])));
-            }
-            
-            side = !side;
+
+            loop_count += 0.001;
         }
-        
     }
     async fn settings_broadcast_task(self) {
         let mut settings_rx = self.settings_watch.subscribe();
@@ -134,7 +133,7 @@ impl FlirOperator {
                 .send(NetMessage::FlirOperator(FlirOperatorMessage::Settings(
                     settings_rx.borrow_and_update().clone(),
                 )));
-            sleep(Duration::from_secs(BROADCAST_SETTINGS_INTERVAL)).await;
+            sleep(BROADCAST_SETTINGS_INTERVAL).await;
         }
     }
     async fn analyze_image_task(self) {
@@ -221,9 +220,8 @@ impl FlirOperator {
         }
     }
     async fn nal_intake_task(self) {
-        let mut net_rx = self.net_tx.subscribe();
         let mut nal_rx = self.flir_driver.ir_stream_rx();
-        let mut last_poll = Instant::now();
+        let mut auto_target_watch = self.auto_target_watch.subscribe();
         let mut decoder = match Decoder::new() {
             Ok(d) => d,
             Err(_) => {
@@ -232,37 +230,30 @@ impl FlirOperator {
             }
         };
 
+        sleep(AUTO_TARGET_REQUEST_INTERVAL + Duration::from_secs(1)).await;
+
         loop {
-            while Instant::now().duration_since(last_poll)
-                < Duration::from_secs(AUTO_TARGET_REQUEST_INTERVAL)
-            {
-                if let Ok(NetMessage::FlirOperator(FlirOperatorMessage::AutoTarget)) =
-                    net_rx.try_recv()
-                {
-                    last_poll = Instant::now()
+            if Instant::now().duration_since(*auto_target_watch.borrow_and_update()) > AUTO_TARGET_REQUEST_INTERVAL{
+                info!("Stopping flir operator image intake");
+                let _ = auto_target_watch.changed().await;
+                info!("Staring flir operator image intake");
+                nal_rx = self.flir_driver.ir_stream_rx();
+                continue;
+            }
+
+            let nal = match nal_rx.recv().await {
+                Ok(nal) => nal,
+                _ => {
+                    continue;
                 }
-                let nal = match nal_rx.recv().await {
-                    Ok(nal) => nal,
-                    _ => {
-                        continue;
-                    }
-                };
+            };
 
-                let image = match FlirOperator::process_nal_data(nal, &mut decoder) {
-                    Some(i) => i,
-                    None => continue,
-                };
+            let image = match FlirOperator::process_nal_data(nal, &mut decoder) {
+                Some(i) => i,
+                None => continue,
+            };
 
-                let _ = self.image_watch.send(image.clone());
-            }
-
-            if let Ok(NetMessage::FlirOperator(FlirOperatorMessage::AutoTarget)) =
-                net_rx.recv().await
-            {
-                info!("Flir operator staring auto target");
-                last_poll = Instant::now();
-            }
-            nal_rx = self.flir_driver.ir_stream_rx();
+            let _ = self.image_watch.send(image.clone());
         }
     }
     /// Takes nal data BEFORE breaking it with to_bitstream
