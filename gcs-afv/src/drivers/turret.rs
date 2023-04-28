@@ -3,7 +3,7 @@
 use std::net::Ipv4Addr;
 
 use afv_internal::{network::InternalMessage, SOCKET_MSG_SIZE, PAN_STEPPER_STEPS_REV, TILT_STEPPER_STEPS_REV, stepper};
-use log::{info, debug};
+use log::{info, debug, error};
 use serde::{Serialize, Deserialize};
 use tokio::{sync::broadcast, time::{sleep, Duration}, net::TcpStream};
 
@@ -101,7 +101,7 @@ impl TurretDriver{
             
             loop{
                 if let Ok(NetMessage::TurretDriver(TurretDriverMessage::SetAngle(port, [pan_angle_change_request, tilt_angle_change_request]))) = net_rx.recv().await{
-                    if !port == self.port{continue;}
+                    if port != self.port{continue;}
                     pan_angle_change = pan_angle_change_request;
                     tilt_angle_change = tilt_angle_change_request;
                     break;
@@ -110,7 +110,7 @@ impl TurretDriver{
             
             loop{
                 if let Ok(NetMessage::TurretDriver(TurretDriverMessage::Angle(port, [current_pan_angle, current_tilt_angle]))) = net_rx.recv().await{
-                    if !port == self.port{continue;}
+                    if port != self.port{continue;}
                     pan_angle = current_pan_angle;
                     tilt_angle = current_tilt_angle;
                     break;
@@ -120,7 +120,7 @@ impl TurretDriver{
             let new_pan_angle = pan_angle + pan_angle_change;
             let new_tilt_angle = tilt_angle + tilt_angle_change;
 
-            info!("Turret {} angle set to {} x {}", self.port, new_pan_angle, new_tilt_angle);
+            error!("Turret {} angle set to {} x {}", self.port, new_pan_angle, new_tilt_angle);
 
             if let Some(msg) = InternalMessage::Turret(afv_internal::turret::TurretMsg::SetSteps((stepper::convert_angle_steps(new_pan_angle, PAN_STEPPER_STEPS_REV), stepper::convert_angle_steps(new_tilt_angle, TILT_STEPPER_STEPS_REV)))).to_msg(){
                 self.turret_socket.write_data(&msg).await;

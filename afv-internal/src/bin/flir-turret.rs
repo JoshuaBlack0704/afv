@@ -16,7 +16,15 @@ const IP: [u8;4] = [192,168,4,20];
 fn main() -> ! {
     let peripherals = arduino_hal::Peripherals::take().unwrap();
     let pins = arduino_hal::pins!(peripherals);
-    // pins.a0.into_output_high();
+    let mut d9 = pins.d9.into_output_high();
+    arduino_hal::delay_ms(3000);
+    d9.set_low();
+    let mut d8 = pins.d8.into_output_high();
+    arduino_hal::delay_ms(3000);
+    d8.set_low();
+    let mut d7 = pins.d7.into_output_high();
+    arduino_hal::delay_ms(3000);
+    d7.set_low();
     let mut serial = arduino_hal::default_serial!(peripherals, pins, 57600);    
     let mut cs = pins.d10.into_output();
     cs.set_high();
@@ -40,9 +48,9 @@ fn main() -> ! {
     let mut flir_turret = Turret::new(pan, tilt, FLIR_TURRET_PORT, SocketBlock::SOCKET0, &mut spi, &mut cs, &mut serial);
     
     let mut pan = StepperMotor::new(pins.a0.into_output(), pins.a1.into_output(), 330, -1000, Some(16), 1000, 500, false);
-    pan.home(300, &mut serial);
-    let mut tilt = StepperMotor::new(pins.a2.into_output(), pins.a3.into_output(), 10, -60, Some(16), 2000, 1000, false);
-    tilt.home(266, &mut serial);
+    // pan.home(300, &mut serial);
+    let mut tilt = StepperMotor::new(pins.a2.into_output(), pins.a3.into_output(), 50, -60, Some(16), 2000, 1000, true);
+    // tilt.home(-266, &mut serial);
     let mut nozzle_turret = Turret::new(pan, tilt, NOZZLE_TURRET_PORT, SocketBlock::SOCKET1, &mut spi, &mut cs, &mut serial);
     
     let mut garmin_lidar = GarminLidarV3::new(None, &mut serial);

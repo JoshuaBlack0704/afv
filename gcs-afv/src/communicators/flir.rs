@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use afv_internal::{NOZZLE_TURRET_PORT, FLIR_TURRET_PORT};
 use eframe::{
     egui::{
         self,
@@ -119,6 +120,7 @@ impl FlirSystemCommunicator {
             let pixels = match image.as_rgb8() {
                 Some(i) => i,
                 None => continue,
+                
             }
             .as_flat_samples();
             let size = [image.width() as usize, image.height() as usize];
@@ -276,6 +278,9 @@ impl Renderable for FlirSystemCommunicator {
             if ui.button("Start auto target").clicked() {
                 self.auto_target = true;
             }
+        }
+        if ui.button("Raise").clicked(){
+            let _ = self.net_tx.send(NetMessage::TurretDriver(crate::drivers::turret::TurretDriverMessage::SetAngle(NOZZLE_TURRET_PORT, [0.0, 10.0])));
         }
 
         let drag = DragValue::new(&mut self.adjustable_settings.fliter_value)

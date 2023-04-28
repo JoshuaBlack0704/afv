@@ -49,7 +49,7 @@ impl<PS:StepperOps, TS: StepperOps> Turret<PS, TS>{
                             self.poll_steps(spi, cs, serial)
                         },
                         TurretMsg::SetSteps(msg) => {
-                            // let _ = ufmt::uwriteln!(serial, "Turret {} steps set", self.port);
+                            let _ = ufmt::uwriteln!(serial, "Turret {} steps set", self.port);
                             self.set_steps(msg, serial);
                         },
                         _ => {}
