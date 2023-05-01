@@ -19,7 +19,7 @@ use tokio::{
 };
 
 use crate::{
-    drivers::flir::FlirDriverMessage,
+    drivers::{flir::FlirDriverMessage, lights},
     network::NetMessage,
     operators::flir::{FlirAnalysis, FlirOperator, FlirOperatorMessage, FlirOperatorSettings, self},
     ui::Renderable,
@@ -43,6 +43,8 @@ pub struct FlirSystemCommunicator {
     stream_ir_request: Arc<Notify>,
     stream_visual_request: Arc<Notify>,
     auto_target_request_notify: Arc<Notify>,
+    lights_request_notify: Arc<Notify>,
+    lights_on: bool,
 
     //Ui parameters
     adjustable_settings: FlirOperatorSettings,
@@ -79,6 +81,8 @@ impl FlirSystemCommunicator {
             image_analysis_receiver: image_analysis_watch.1,
             auto_target_request_notify: Default::default(),
             auto_target: Default::default(),
+            lights_request_notify: Default::default(),
+            lights_on: false,
         };
 
         tokio::spawn(comm.clone().nal_intake_task());
@@ -87,6 +91,7 @@ impl FlirSystemCommunicator {
         tokio::spawn(comm.clone().settings_update_task());
         tokio::spawn(comm.clone().auto_target_request_task());
         tokio::spawn(comm.clone().analysis_intake_task());
+        tokio::spawn(comm.clone().lights_request_task());
 
         debug!("Starting new flir communication system");
 
@@ -164,6 +169,18 @@ impl FlirSystemCommunicator {
             let _ = self
                 .net_tx
                 .send(NetMessage::FlirOperator(FlirOperatorMessage::AutoTarget));
+            let _ = self
+                .net_tx
+                .send(NetMessage::NozzleOperator(crate::operators::nozzle::NozzleOperatorMessage::AutoTarget));
+        }
+    }
+    async fn lights_request_task(self) {
+        loop {
+            self.lights_request_notify.notified().await;
+            sleep(lights::LIGHTS_COMMAND_INTERVAL).await;
+            let _ = self
+                .net_tx
+                .send(NetMessage::LightDriver(lights::LightsDriverMessage::TurnOn));
         }
     }
     async fn settings_update_task(self) {
@@ -280,9 +297,22 @@ impl Renderable for FlirSystemCommunicator {
             }
         }
         if ui.button("Raise").clicked(){
-            let _ = self.net_tx.send(NetMessage::TurretDriver(crate::drivers::turret::TurretDriverMessage::SetAngle(NOZZLE_TURRET_PORT, [0.0, 10.0])));
+            let _ = self.net_tx.send(NetMessage::TurretDriver(crate::drivers::turret::TurretDriverMessage::SetAngleChange(NOZZLE_TURRET_PORT, [0.0, 10.0])));
+        }
+        if self.lights_on{
+            self.lights_request_notify.notify_one();
+            if ui.button("Lights off").clicked(){
+                self.lights_on = false;
+            }
+            
+        }
+        else{
+            if ui.button("Lights On").clicked(){
+                self.lights_on = true;
+            }
         }
 
+        
         let drag = DragValue::new(&mut self.adjustable_settings.fliter_value)
             .clamp_range(0..=255)
             .speed(1.0);

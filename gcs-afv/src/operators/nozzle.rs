@@ -73,9 +73,10 @@ impl NozzleOperator{
             }
 
 
-            let new_angles = Self::calculate_firing_solution(flir_pan_angle, lidar_distance as f32 / 100.0);
+            let mut new_angles = Self::calculate_firing_solution(flir_pan_angle, lidar_distance as f32 / 100.0);
+            new_angles = [flir_pan_angle, new_angles[1]];
 
-            let _ = self.net_tx.send(NetMessage::TurretDriver(TurretDriverMessage::SetAngle(NOZZLE_TURRET_PORT, new_angles)));
+            let _ = self.net_tx.send(NetMessage::TurretDriver(TurretDriverMessage::SetAbsoluteAngle(NOZZLE_TURRET_PORT, new_angles)));
 
             net_rx = self.net_tx.subscribe();
         }
@@ -93,7 +94,7 @@ impl NozzleOperator{
         let pan_angle = target_coords.angle_between(Vec2::X);
 
         // m/s
-        let speed = 20.0;
+        let speed = 1.0;
 
         if let Some(tilt_angle) = Self::optimal_angle(lidar_distance_meter, 0.0, speed, 9.81){
             return [pan_angle, tilt_angle];

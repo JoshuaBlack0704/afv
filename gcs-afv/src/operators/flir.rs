@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use afv_internal::FLIR_TURRET_PORT;
+use afv_internal::{FLIR_TURRET_PORT, NOZZLE_TURRET_PORT};
 use glam::Vec2;
 use image::{DynamicImage, ImageBuffer};
 use log::{error, info, trace};
@@ -111,18 +111,21 @@ impl FlirOperator {
             match net_rx.recv().await{
                 Ok(NetMessage::FlirOperator(FlirOperatorMessage::Analysis(Some(analysis)))) => {
                     info!("Commanding flir turret to changle {:?} deg", analysis.angle_change);
-                    let _ = self.net_tx.send(NetMessage::TurretDriver(TurretDriverMessage::SetAngle(FLIR_TURRET_PORT, analysis.angle_change)));
+                    let _ = self.net_tx.send(NetMessage::TurretDriver(TurretDriverMessage::SetAngleChange(FLIR_TURRET_PORT, analysis.angle_change)));
+                    // let _ = self.net_tx.send(NetMessage::TurretDriver(TurretDriverMessage::SetAngle(NOZZLE_TURRET_PORT, analysis.angle_change)));
                     
                 },
                 Ok(NetMessage::FlirOperator(FlirOperatorMessage::Analysis(None))) => {
-                    let angle:f32 = loop_count.sin() * 90.0;
+                    let dir = loop_count.sin().signum();
+                    let angle:f32 = 30.0 * dir;
                     info!("Commanding flir turret rotate {} deg", angle);
-                    let _ = self.net_tx.send(NetMessage::TurretDriver(TurretDriverMessage::SetAngle(FLIR_TURRET_PORT, [angle, 0.0])));
+                    let _ = self.net_tx.send(NetMessage::TurretDriver(TurretDriverMessage::SetAngleChange(FLIR_TURRET_PORT, [angle, 0.0])));
+                    // let _ = self.net_tx.send(NetMessage::TurretDriver(TurretDriverMessage::SetAngle(NOZZLE_TURRET_PORT, [angle, 0.0])));
                 },
                 _ => {}
             }
 
-            loop_count += 0.001;
+            loop_count += 0.005;
         }
     }
     async fn settings_broadcast_task(self) {
@@ -141,6 +144,7 @@ impl FlirOperator {
         let mut settings_rx = self.settings_watch.subscribe();
 
         loop {
+            sleep(AUTO_TARGET_REQUEST_INTERVAL).await;
             match image_rx.changed().await {
                 Ok(_) => {}
                 Err(_) => continue,
@@ -200,8 +204,8 @@ impl FlirOperator {
             let image_height = image.height();
             let center = Vec2::new((image_width as f32) / 2.0, (image_height as f32) / 2.0);
             let delta_pix = (target_centroid - center) * Vec2::new(1.0, 1.0);
-            let deg_pix_x = FLIRFOV.0 / image_width as f32;
-            let deg_pix_y = FLIRFOV.1 / image_height as f32;
+            let deg_pix_x = (FLIRFOV.0 * 2) / image_width as f32;
+            let deg_pix_y = (FLIRFOV.1 * 2) / image_height as f32;
 
             let delta_x = delta_pix.x * deg_pix_x;
             let delta_y = delta_pix.y * deg_pix_y;

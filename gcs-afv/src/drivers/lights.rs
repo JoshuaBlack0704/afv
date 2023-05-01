@@ -1,10 +1,11 @@
 use afv_internal::{LIGHTS_PORT, network::InternalMessage, lights::LightsMsg};
+use log::error;
 use serde::{Serialize, Deserialize};
 use tokio::{sync::broadcast, time::{Instant, interval, Duration, timeout}};
 
 use crate::network::{NetMessage, socket::Socket, scanner::{ScanBuilder, ScanCount}};
 
-pub const LIGHTS_COMMAND_INTERVAL:u64 = 1;
+pub const LIGHTS_COMMAND_INTERVAL:Duration = Duration::from_secs(1);
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum LightsDriverMessage{
@@ -43,16 +44,18 @@ impl LightsDriver{
     async fn command_lights_task(self){
         let mut net_rx = self.net_tx.subscribe();
         let mut last_cmd = Instant::now();
-        let mut interval = interval(Duration::from_secs(LIGHTS_COMMAND_INTERVAL));
+        let mut interval = interval(LIGHTS_COMMAND_INTERVAL);
 
         loop{
-            if let Ok(Ok(NetMessage::LightDriver(LightsDriverMessage::TurnOn))) = timeout(Duration::from_secs(LIGHTS_COMMAND_INTERVAL + 1), net_rx.recv()).await{
+            if let Ok(Ok(NetMessage::LightDriver(LightsDriverMessage::TurnOn))) = timeout(LIGHTS_COMMAND_INTERVAL + Duration::from_secs(1), net_rx.recv()).await{
                 last_cmd = Instant::now();
             }
+            net_rx = self.net_tx.subscribe();
             interval.tick().await;
 
-            if Instant::now().duration_since(last_cmd) < Duration::from_secs(LIGHTS_COMMAND_INTERVAL){
+            if Instant::now().duration_since(last_cmd) < LIGHTS_COMMAND_INTERVAL{
                 if let Some(msg) = InternalMessage::Lights(LightsMsg::TurnOn).to_msg(){
+                    error!("Turning lights on");
                     self.light_socket.write_data(&msg).await;
                 }
                 continue;
@@ -61,6 +64,7 @@ impl LightsDriver{
             if let Some(msg) = InternalMessage::Lights(LightsMsg::TurnOff).to_msg(){
                 self.light_socket.write_data(&msg).await;
             }
+
         }
     }
 }

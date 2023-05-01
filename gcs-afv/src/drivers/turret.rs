@@ -9,12 +9,13 @@ use tokio::{sync::broadcast, time::{sleep, Duration}, net::TcpStream};
 
 use crate::network::{NetMessage, socket::Socket, scanner::{ScanCount, ScanBuilder}};
 
-pub const POLL_STEPS_INTERVAL: Duration= Duration::from_millis(500);
+pub const POLL_STEPS_INTERVAL: Duration= Duration::from_millis(1000);
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum TurretDriverMessage{
-    SetAngle(u16, [f32; 2]),
+    SetAngleChange(u16, [f32; 2]),
     Angle(u16, [f32; 2]),
+    SetAbsoluteAngle(u16, [f32; 2]),
 }
 
 #[derive(Clone)]
@@ -99,12 +100,20 @@ impl TurretDriver{
             let pan_angle: f32;
             let tilt_angle: f32;
             
-            loop{
-                if let Ok(NetMessage::TurretDriver(TurretDriverMessage::SetAngle(port, [pan_angle_change_request, tilt_angle_change_request]))) = net_rx.recv().await{
+            'outer: loop{
+                if let Ok(NetMessage::TurretDriver(TurretDriverMessage::SetAngleChange(port, [pan_angle_change_request, tilt_angle_change_request]))) = net_rx.recv().await{
                     if port != self.port{continue;}
                     pan_angle_change = pan_angle_change_request;
                     tilt_angle_change = tilt_angle_change_request;
                     break;
+                }
+                if let Ok(NetMessage::TurretDriver(TurretDriverMessage::SetAbsoluteAngle(port, [pan_angle_change_request, tilt_angle_change_request]))) = net_rx.recv().await{
+                    if port != self.port{continue;}
+                    if let Some(msg) = InternalMessage::Turret(afv_internal::turret::TurretMsg::SetSteps((stepper::convert_angle_steps(pan_angle_change_request, PAN_STEPPER_STEPS_REV), stepper::convert_angle_steps(tilt_angle_change_request, TILT_STEPPER_STEPS_REV)))).to_msg(){
+                        self.turret_socket.write_data(&msg).await;
+                    }
+                    continue 'outer;
+                    
                 }
             }
             
