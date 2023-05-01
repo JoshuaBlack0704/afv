@@ -1,4 +1,4 @@
-use arduino_hal::{Spi, spi::ChipSelectPin, prelude::{_embedded_hal_blocking_spi_Write, _embedded_hal_spi_FullDuplex}, hal::port::PB2};
+use arduino_hal::{Spi, spi::ChipSelectPin, prelude::{_embedded_hal_blocking_spi_Write, _embedded_hal_spi_FullDuplex}, hal::{port::PB2, usart::Usart0}, clock::MHz16};
 use embedded_hal::digital::v2::OutputPin;
 
 pub mod control;
@@ -16,7 +16,8 @@ impl W5500{
         mac: [u8;6], 
         ip: [u8;4],
         spi: &mut Spi,
-        cs: &mut ChipSelectPin<PB2>
+        cs: &mut ChipSelectPin<PB2>,
+        serial: &mut Usart0<MHz16>,
     )
 -> (u8, W5500)     {
         let common = Self::common_register();
@@ -30,6 +31,21 @@ impl W5500{
         arduino_hal::delay_us(1);
         common.write_ip(ip, spi, cs);
         arduino_hal::delay_us(1);
+        let version = common.read_version_register(spi, cs);
+        let _ = ufmt::uwriteln!(serial, "W5500 Version: {}", version);
+        let gateway = common.read_gateway_addr( spi, cs);
+        let _ = ufmt::uwriteln!(serial, "W5500 Gateway: {:?}", gateway);
+        let subnet = common.read_subnet(spi, cs);
+        let _ = ufmt::uwriteln!(serial, "W5500 Subnet: {:?}", subnet);
+        let mac = common.read_mac(spi, cs);
+        let _ = ufmt::uwriteln!(serial, "W5500 MAC: {:?}", mac);
+        let ip = common.read_ip(spi, cs);
+        let _ = ufmt::uwriteln!(serial, "W5500 Ip: {:?}", ip);
+        let rtr = common.read_retry_time(spi, cs);
+        let _ = ufmt::uwriteln!(serial, "W5500 Retry Time: {:?}", rtr);
+        let rcr = common.read_retry_count(spi, cs);
+        let _ = ufmt::uwriteln!(serial, "W5500 Retry Count: {:?}", rcr);
+        let _ = ufmt::uwriteln!(serial, "W5500 Link Status {}", common.read_phy_cfg(spi, cs).link_status());
         (common.read_version_register(spi, cs), Self{})
         
     }

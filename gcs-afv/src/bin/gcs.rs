@@ -1,5 +1,6 @@
-use gcs_afv::gcs::Gcs;
+use gcs_afv::ui::GcsUi;
 
 fn main(){
-    Gcs::launch();
+    pretty_env_logger::init();
+    GcsUi::launch();
 }
