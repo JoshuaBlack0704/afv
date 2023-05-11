@@ -7,16 +7,20 @@ use tokio::{sync::Mutex, runtime::Runtime};
 
 use crate::{network::scanner::ScanCount, operators::afv_launcher, communicators::afv::AfvCommuncation};
 
+/// Generic representation of a renderable object
 pub trait Renderable{
     fn render(&mut self, ui: &mut Ui);
 }
 
 #[derive(Parser)]
+/// Used with the clap crate to pass command line arguments to the process
 struct GcsArgs{
     #[arg(short, long)]
     simulate: bool,
 }
 
+/// This is the main starting struct for the ground station
+/// This struct is reponsible for creating the eframe event loop and opening the window
 pub struct GcsUi{
     runtime: Runtime,
     connected_afvs: Arc<Mutex<Vec<AfvCommuncation>>>,
@@ -25,7 +29,6 @@ pub struct GcsUi{
 
 impl GcsUi{
     pub fn launch(){
-        
         eframe::run_native("Afv Ground Control Station", Default::default(), Box::new(|cc| Self::run(cc)));
     }
     pub fn run(_cc: &CreationContext) -> Box<GcsUi> {
@@ -75,6 +78,7 @@ impl GcsUi{
 }
 
 impl eframe::App for GcsUi{
+    /// This is the required function needed operate the eframe event loop
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
         TopBottomPanel::top("Title Section").show(ctx, |ui| {
             self.top_panel(ui);

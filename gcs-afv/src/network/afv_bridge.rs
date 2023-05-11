@@ -8,17 +8,24 @@ use crate::{network::{AFV_COMM_PORT, scanner::{ScanBuilder, ScanCount}, socket::
 
 use super::NetMessage;
 
+/// The AfvBridge is a bus member that is designed to transparently broadcast messages from 
+/// one bus to another. Essentially making it so that two computers share a logical bus
+/// This functionality is the foundation for the publish-filter architecture of the code base.
+/// The AfvBridge is the struct that finds and connects to afvs and ground stations.
 pub struct AfvBridge{
 }
 
 impl AfvBridge{
+    /// A wrapper around a ScanBuilder that auto fills some data and returns that successful Sockets
     pub fn scan(scan_count: ScanCount) -> flume::Receiver<Socket>{
         let (tx, rx) = flume::unbounded();
+        // Starting the scan
         let scan = ScanBuilder::default().scan_count(scan_count).add_port(AFV_COMM_PORT).dispatch();
         tokio::spawn(async move{
             info!("Starting Afv scan search using port {}", AFV_COMM_PORT);
             while let Ok(stream) = scan.recv_async().await{
                 info!("Afv found at addr {}", stream.peer_addr().unwrap());
+                // Wrapping in Socket struct
                 let socket = Socket::new(stream, false);
                 if let Err(_) = tx.send_async(socket).await{break;}
             }
@@ -26,6 +33,10 @@ impl AfvBridge{
         });
         rx
     }
+    /// A wrapper around a ScanBuilder that will search for tcp servers on the AFV_COMM_PORT tcp port
+    /// Note, since we are using async architecture, what happens is for every successful connection 
+    /// we spawn a listen task with a copy of the bus channel transmitter that will transparently receive and
+    /// and send data from/to the bus. That is why this method does not need to return anything
     pub async fn client(tx: broadcast::Sender<NetMessage>, scan_count: ScanCount){
         info!("Starting Afv server search using port {}", AFV_COMM_PORT);
         let scan = ScanBuilder::default().scan_count(scan_count).add_port(AFV_COMM_PORT).dispatch();
@@ -36,6 +47,7 @@ impl AfvBridge{
         }
         info!("Afv server search with port {} completed", AFV_COMM_PORT);
     }
+    /// This will spawn a SINGLE AfvBridge that will wait for a connection to be made. Then it will spawn the listen task 
     pub async fn server(tx: broadcast::Sender<NetMessage>, tgt_interface: Option<Interface>){
         info!("Opening afv bridge server on port {}", AFV_COMM_PORT);
         
@@ -97,14 +109,14 @@ impl AfvBridge{
     pub async fn direct_connect(bridge_tx: broadcast::Sender<NetMessage>, bus_tx: broadcast::Sender<NetMessage>, tgt: SocketAddr){
         todo!()
     }
-
+    /// A helper function to start the neccesary tasks to make a functional bridge system
     pub fn start_communication(tx: broadcast::Sender<NetMessage>, socket: Socket){
         let (d_tx, d_rx) = watch::channel(NetMessage::NamingOperator(NamingOperatorMessage{id:  0}));
 
         tokio::spawn(Self::forward(tx.subscribe(), d_rx, socket.clone()));
         tokio::spawn(Self::listen(tx, d_tx, socket.clone()));
     }
-
+    /// The main task that will put network tasks on the local bus
     async fn listen(tx: broadcast::Sender<NetMessage>, duplicates: watch::Sender<NetMessage>, socket: Socket){
         let mut data = vec![];
 
@@ -125,7 +137,7 @@ impl AfvBridge{
             data.clear();
         }
     }
-
+    /// The main task that will take local bus messages and broadcast over the network
     async fn forward(mut rx: broadcast::Receiver<NetMessage>, mut duplicates: watch::Receiver<NetMessage>, socket: Socket){
        loop{
             let msg = match rx.recv().await{

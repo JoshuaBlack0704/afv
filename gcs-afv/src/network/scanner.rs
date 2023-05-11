@@ -11,6 +11,7 @@ use tokio::{
     time::{sleep, Duration},
 };
 
+/// The scanner is a system that will scan selected ports on every address connected to every interface available to the computer
 pub struct ScanBuilder {
     scan_count: ScanCount,
     tgt_ports: Vec<u16>,
@@ -20,28 +21,37 @@ pub struct ScanBuilder {
 }
 
 impl ScanBuilder {
+    /// The amount of scans to execute
     pub fn scan_count(mut self, scan_count: ScanCount) -> ScanBuilder {
         self.scan_count = scan_count;
         self
     }
+    /// How to exclude found connections
     pub fn excluded_peers(mut self, peers: PeerExclusion) -> ScanBuilder {
         self.excluded_peers = peers;
         self
     }
+    /// The number of parallel connections to attempt at once during a scan
     pub fn parallel_attempts(mut self, parallel_attempts: usize) -> ScanBuilder {
         self.parallel_attempts = parallel_attempts;
         self
     }
+    /// Add a target port to the scan 
     pub fn add_port(mut self, port: u16) -> ScanBuilder {
         self.tgt_ports.push(port);
         self
     }
-    /// Must be called within an async runtime
+    /// Must be called within an async runtime, will create a scan result channel and start the scan.
+    /// Notice that any successful connections are sent through that cannel.
+    /// By waiting on the return channel you are waiting on a new successful connection
+    /// Also notice that a scan only continue for as long as an instance of the receiver exists
+    /// Should the receiver end of the channel be dropped, the scan will end
     pub fn dispatch(self) -> flume::Receiver<TcpStream> {
         let (tx, rx) = flume::unbounded();
         tokio::spawn(self.scan(tx));
         rx
     }
+    /// This is the actual async task that will conduct the networl scan
     async fn scan(self, tx: Sender<TcpStream>) {
         // First we pull the interfaces
         let mut interfaces = match default_net::get_default_interface(){
@@ -164,6 +174,7 @@ impl ScanBuilder {
                                 Ok(s) => s,
                                 Err(_) => return,
                             };
+                            // We must use a raw socket struct because we need to bind to specific interfaces
                             if let Err(_) = socket.bind((net.addr(), 0u16).into()) {
                                 return;
                             }
@@ -197,6 +208,7 @@ impl ScanBuilder {
 }
 
 impl Default for ScanBuilder {
+    /// Can call a default scan builder
     fn default() -> Self {
         Self {
             scan_count: Default::default(),
@@ -208,8 +220,11 @@ impl Default for ScanBuilder {
     }
 }
 
+/// How many scans we want
 pub enum ScanCount {
+    /// Will cause a scan to go forever
     Infinite,
+    /// Can specify a limited number of scan rounds
     Limited(u32),
 }
 impl Default for ScanCount {
@@ -218,6 +233,7 @@ impl Default for ScanCount {
     }
 }
 
+/// How to exclude dupicate connections
 pub enum PeerExclusion {
     Never,
     PreExcluded(Vec<SocketAddr>),

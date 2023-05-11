@@ -42,6 +42,7 @@ impl Socket {
     pub async fn get_writer(&self) -> MutexGuard<OwnedWriteHalf> {
         self.wr.lock().await
     }
+    /// Reads exactly one byte from the data stream
     pub async fn read_byte(&self) -> u8 {
         loop {
             let mut rd = self.get_reader().await;
@@ -55,6 +56,7 @@ impl Socket {
             }
         }
     }
+    /// Writes a whole slice of data to the stream
     pub async fn write_data(&self, data: &[u8]) {
         let _ = self.get_writer().await.write(data).await;
     }
@@ -64,6 +66,8 @@ impl Socket {
     pub fn local_addr(&self) -> SocketAddr {
         self.local
     }
+    /// This function automatically attempts a reconnection to the peer
+    /// Is is private and is automatically called from within the scanner instance
     async fn reconnect(&self) {
         info!("Socket has disconnected from {}", self.peer);
         let mut rd = self.get_reader().await;

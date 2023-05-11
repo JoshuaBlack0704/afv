@@ -5,6 +5,8 @@ use crate::{drivers::{flir::FlirDriverMessage, turret::TurretDriverMessage, lida
 pub const AFV_COMM_PORT: u16 = 4040;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+/// These are the core messages that processes on the bus use to communicate
+/// They are split into the logical sections/systems that comprise the code base
 pub enum NetMessage{
     FlirDriver(FlirDriverMessage),
     TurretDriver(TurretDriverMessage),
@@ -24,5 +26,3 @@ pub mod scanner;
 pub mod socket;
 
 pub mod afv_bridge;
-
-pub mod gcs_bridge;
