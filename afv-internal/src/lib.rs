@@ -1,6 +1,6 @@
 //! Before attempting to learn how to use this codebase it is GREATLY recommended
 //! to learn [Rust](https://www.rust-lang.org).
-//! Once you have installed rust throug [Rustup](https://rustup.rs) you can use `Cargo doc --open` to
+//! Once you have installed rust throug [Rustup](https://rustup.rs) you can use `cargo doc --open` to
 //! view this documention
 //!
 //! It is highly recommended to familiarize yourself with the following crates:

@@ -1,6 +1,6 @@
 //! Before attempting to learn how to use this codebase it is GREATLY recommended
 //! to learn [Rust](https://www.rust-lang.org).
-//! Once you have installed rust through [Rustup](https://rustup.rs) you can use `Cargo doc --open` from within the gcs-afv folder to
+//! Once you have installed rust through [Rustup](https://rustup.rs) you can use `cargo doc --open` from within the gcs-afv folder to
 //! view its documention. Same goes for afv-internal
 //!
 //! It is highly recommended to familiarize yourself with the following crates:
