@@ -9,7 +9,7 @@ use retina::{
 use serde::{Deserialize, Serialize};
 use tokio::{
     sync::{broadcast, watch},
-    time::{Duration, Instant, sleep},
+    time::{sleep, Duration, Instant},
 };
 use url::Url;
 
@@ -29,6 +29,11 @@ pub enum FlirDriverMessage {
 }
 
 #[derive(Clone)]
+/// The FlirDriver is responsible for managing access to the FLIR A50 camera
+///
+/// Upon creation it will scan for the camera on all of the computers network interfaces
+///
+/// Once connected it will start both IR and visual image streams using the retina crate over RTSP
 pub struct FlirDriver {
     net_tx: broadcast::Sender<NetMessage>,
     ir_nal_stream: broadcast::Sender<Vec<u8>>,
@@ -39,6 +44,7 @@ pub struct FlirDriver {
 }
 
 impl FlirDriver {
+    /// This will create a new flir driver and register it on the main bus channel (net_tx)
     pub async fn new(net_tx: broadcast::Sender<NetMessage>, visual_stream: bool) -> FlirDriver {
         let driver = Self {
             ir_nal_stream: broadcast::channel(100).0,
@@ -60,27 +66,35 @@ impl FlirDriver {
 
         driver
     }
+    /// This provides a public way of accessing the created ir nal packet stream
     pub fn ir_stream_rx(&self) -> broadcast::Receiver<Vec<u8>> {
         self.ir_nal_stream.subscribe()
     }
-    async fn network_ir_stream_watch_task(self){
+    /// This upates the time of last request for the network ir stream task
+    async fn network_ir_stream_watch_task(self) {
         let mut net_rx = self.net_tx.subscribe();
 
-        loop{
-            if let Ok(NetMessage::FlirDriver(FlirDriverMessage::OpenIrStream)) = net_rx.recv().await{
+        loop {
+            if let Ok(NetMessage::FlirDriver(FlirDriverMessage::OpenIrStream)) = net_rx.recv().await
+            {
                 let _ = self.ir_network_watch.send(Instant::now());
             }
         }
     }
-    async fn network_visual_stream_watch_task(self){
+    /// This upates the time of last request for the network visual stream task
+    async fn network_visual_stream_watch_task(self) {
         let mut net_rx = self.net_tx.subscribe();
-        loop{
-            if let Ok(NetMessage::FlirDriver(FlirDriverMessage::OpenVisualStream)) = net_rx.recv().await{
+        loop {
+            if let Ok(NetMessage::FlirDriver(FlirDriverMessage::OpenVisualStream)) =
+                net_rx.recv().await
+            {
                 let _ = self.visual_network_watch.send(Instant::now());
             }
         }
     }
 
+    /// This task connects to the FLIR, establishes an RTSP stream, and send every captured packet on its local
+    /// it nal packet stream [tokio::sync::broadcast] channel
     async fn ir_stream_task(self) {
         // The first step is to attempt a connection to the flir
         let scan = ScanBuilder::default()
@@ -155,6 +169,9 @@ impl FlirDriver {
             let _ = self.ir_nal_stream.send(frame);
         }
     }
+
+    /// This task connects to the FLIR, establishes an RTSP stream, and send every captured packet on its local
+    /// it nal packet stream [tokio::sync::broadcast] channel
     async fn visual_stream_task(self) {
         // The first step is to attempt a connection to the flir
         let scan = ScanBuilder::default()
@@ -229,13 +246,17 @@ impl FlirDriver {
             let _ = self.visual_nal_stream.send(frame);
         }
     }
+
+    /// This will send ir nal packets over the main bus (and network) when a steady stream of request are arriving over the bus.
     async fn network_ir_stream_task(self) {
         let mut nal_rx = self.ir_nal_stream.subscribe();
         let mut request_watch = self.ir_network_watch.subscribe();
         sleep(STREAM_REQUEST_INTERVAL + Duration::from_secs(1)).await;
 
         loop {
-            if Instant::now().duration_since(*request_watch.borrow_and_update()) > STREAM_REQUEST_INTERVAL{
+            if Instant::now().duration_since(*request_watch.borrow_and_update())
+                > STREAM_REQUEST_INTERVAL
+            {
                 info!("Network IR stream stopped");
                 let _ = request_watch.changed().await;
                 nal_rx = self.ir_nal_stream.subscribe();
@@ -243,20 +264,23 @@ impl FlirDriver {
                 continue;
             }
 
-            if let Ok(nal) = nal_rx.recv().await{
+            if let Ok(nal) = nal_rx.recv().await {
                 let _ = self
                     .net_tx
                     .send(NetMessage::FlirDriver(FlirDriverMessage::NalPacket(nal)));
             }
         }
     }
+    /// This will send visual nal packets over the main bus (and network) when a steady stream of request are arriving over the bus.
     async fn network_visual_stream(self) {
         let mut nal_rx = self.visual_nal_stream.subscribe();
         let mut request_watch = self.visual_network_watch.subscribe();
         sleep(STREAM_REQUEST_INTERVAL + Duration::from_secs(1)).await;
 
         loop {
-            if Instant::now().duration_since(*request_watch.borrow_and_update()) > STREAM_REQUEST_INTERVAL{
+            if Instant::now().duration_since(*request_watch.borrow_and_update())
+                > STREAM_REQUEST_INTERVAL
+            {
                 info!("Network visual stream stopped");
                 let _ = request_watch.changed().await;
                 nal_rx = self.visual_nal_stream.subscribe();
@@ -264,7 +288,7 @@ impl FlirDriver {
                 continue;
             }
 
-            if let Ok(nal) = nal_rx.recv().await{
+            if let Ok(nal) = nal_rx.recv().await {
                 let _ = self
                     .net_tx
                     .send(NetMessage::FlirDriver(FlirDriverMessage::NalPacket(nal)));

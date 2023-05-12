@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use afv_internal::{NOZZLE_TURRET_PORT, FLIR_TURRET_PORT};
+use afv_internal::NOZZLE_TURRET_PORT;
 use eframe::{
     egui::{
         self,
