@@ -31,6 +31,20 @@
 //!
 //! To process all the messages and data streaming through the bus in an efficient manner, all the structs present 
 //! in the GCS-AFV crate use an async-await through architecture [Tokio](https://tokio.rs) to schedule operations as the data is trasmitted and delivered.
+//!
+//! To run a simulated version of the Control Station and AFV run `cargo run --bin=gcs -- -s` from within the gcs-afv folder
+//!
+//! To run the Control station run `cargo run --bin=gcs` from within the gcs-afv folder
+//!
+//! To run the AFV system in client mode run `cargo run --bin=afv` from within the gcs-afv folder
+//!
+//! To run the AFV system in server mode run `cargo run --bin=afv -- -s` from within the gcs-afv folder
+//!
+//! To enable logging output you will need to set the environment vaiable RUST_LOG = 'debug'
+//!
+//! In powershell run `$Env:RUST_LOG = 'debug'`
+//!
+//! See [Log](https://docs.rs/log/latest/log) crate as [Pretty Env Logger](https://docs.rs/pretty_env_logger/latest/pretty_env_logger) crate
 
 /// This module contains the networking struct that enable the bus to operate transparently over different networks
 /// such as the Control Stations network and the AFV's local network.
